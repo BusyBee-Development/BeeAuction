@@ -21,7 +21,7 @@ public class GlobalAuctionCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         // Check permission
-        if (!sender.hasPermission("globalauction.admin")) {
+        if (!sender.hasPermission("auction.admin")) {
             MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, MessageEnum.NO_PERMISSION.get());
             return true;
         }

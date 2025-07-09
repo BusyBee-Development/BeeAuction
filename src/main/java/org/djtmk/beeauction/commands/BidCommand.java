@@ -8,10 +8,10 @@ import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.config.MessageEnum;
 import org.djtmk.beeauction.util.MessageUtil;
 
-public class PodbijCommand implements CommandExecutor {
+public class BidCommand implements CommandExecutor {
     private final BeeAuction plugin;
 
-    public PodbijCommand(BeeAuction plugin) {
+    public BidCommand(BeeAuction plugin) {
         this.plugin = plugin;
     }
 
@@ -26,7 +26,7 @@ public class PodbijCommand implements CommandExecutor {
         Player player = (Player) sender;
 
         // Check permission
-        if (!player.hasPermission("globalauction.bid")) {
+        if (!player.hasPermission("auction.bid")) {
             MessageUtil.sendMessage(player, MessageEnum.NO_PERMISSION.get());
             return true;
         }

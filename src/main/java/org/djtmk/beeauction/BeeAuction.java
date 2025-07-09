@@ -6,7 +6,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.djtmk.beeauction.auctions.AuctionManager;
 import org.djtmk.beeauction.commands.GlobalAuctionCommand;
 import org.djtmk.beeauction.commands.GlobalAuctionTabCompleter;
-import org.djtmk.beeauction.commands.PodbijCommand;
+import org.djtmk.beeauction.commands.BidCommand;
 import org.djtmk.beeauction.config.ConfigManager;
 import org.djtmk.beeauction.data.DatabaseManager;
 import org.djtmk.beeauction.economy.EconomyHandler;
@@ -60,10 +60,10 @@ public final class BeeAuction extends JavaPlugin {
 
         // Register player bid command
         if (getCommand(playerBidCommand) != null) {
-            getCommand(playerBidCommand).setExecutor(new PodbijCommand(this));
+            getCommand(playerBidCommand).setExecutor(new BidCommand(this));
         } else {
             log.warning("Failed to register player bid command: " + playerBidCommand + ". Using default command.");
-            getCommand("podbij").setExecutor(new PodbijCommand(this));
+            getCommand("podbij").setExecutor(new BidCommand(this));
         }
 
         // Log startup
