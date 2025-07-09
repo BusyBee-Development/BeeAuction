@@ -1,0 +1,26 @@
+# GlobalAuction Messages
+
+# Auction messages
+auction-started: "&#00FF00[!] Auction started for {item} &#00FF00Starting at {price} &#00FF00!"
+new-bid: "&#FFD700{player} has bid {amount} &#FFD700!{time_extension}"
+outbid: "&#FF0000You have been outbid by {player} &#FF0000!"
+win: "&#00FF00Congrats! You won the auction for {item} &#00FF00!"
+cancelled: "&#FF5555Auction was cancelled."
+no-auction: "&#AAAAAAThere is no active auction."
+auction-ended: "&#00FF00Auction ended! {player} &#00FF00won {item} &#00FF00for {amount} &#00FF00!"
+
+# Error messages
+no-permission: "&#FF0000You don't have permission to use this command."
+invalid-amount: "&#FF0000Invalid amount. Minimum bid is {amount} &#FF0000."
+not-enough-money: "&#FF0000You don't have enough money."
+auction-already-active: "&#FF0000There is already an active auction."
+invalid-command: "&#FF0000Invalid command usage."
+
+# Success messages
+reload-success: "&#00FF00Configuration reloaded successfully."
+
+# Auction name question
+auction-name-question: "&#00FFFF[!] Please enter a name for this auction in chat:"
+
+# Time extension message
+time-extension: " &#00FF00Time extended by {seconds} seconds."

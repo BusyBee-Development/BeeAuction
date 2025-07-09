@@ -1,0 +1,30 @@
+name: BeeAuction
+version: ${project.version}
+main: org.djtmk.beeauction.BeeAuction
+api-version: '1.21'
+authors: [ djtmk ]
+description: A global auction plugin for Minecraft servers
+
+depend:
+  - Vault
+
+commands:
+  # Note: Command names and aliases can be customized in config.yml
+  # The commands defined here must match those in config.yml
+  auction:
+    description: Main command for GlobalAuction plugin
+    usage: /auction <start|cancel|reload>
+    aliases: [ba]
+    permission: globalauction.admin
+  bid:
+    description: Bid on the current auction
+    usage: /bid <amount>
+    permission: globalauction.bid
+
+permissions:
+  auction.admin:
+    description: Allows access to admin commands
+    default: op
+  auction.bid:
+    description: Allows bidding on auctions
+    default: true

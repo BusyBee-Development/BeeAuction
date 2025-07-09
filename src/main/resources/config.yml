@@ -1,0 +1,178 @@
+###################################
+#                                 #
+#    BeeAuction Configuration     #
+#    By: BusyBee Development      #
+###################################
+
+#---------------------------------
+# Auction Configuration
+#---------------------------------
+auction:
+  # Time in seconds to add to the auction when a bid is placed
+  bid-time-extension: 30
+  # Time threshold in seconds - only add extension time when the remaining time is below this value (default: 60)
+  bid-time-threshold: 60
+  # Minimum bid amount (default: 100)
+  min-bid-amount: 100
+
+#---------------------------------
+# Storage Configuration
+#---------------------------------
+storage:
+  type: SQLITE
+
+#---------------------------------
+# Commands Configuration
+#---------------------------------
+commands:
+  # Admin command configuration
+  admin:
+    # Main command name (default: globalauction)
+    name: "auction"
+    # Command aliases (default: ga)
+    aliases: ["ba"]
+    # Subcommands
+    subcommands:
+      # Start auction subcommand (default: start)
+      start: "start"
+      # Cancel auction subcommand (default: cancel)
+      cancel: "cancel"
+      # Reload configuration subcommand (default: reload)
+      reload: "reload"
+    # Auction types
+    auction-types:
+      # Item auction type (default: item)
+      item: "item"
+      # Command auction type (default: command)
+      command: "command"
+
+  # Player command configuration
+  player:
+    # Bid command name (default: podbij)
+    bid: "bid"
+    # Bid command aliases (can be empty)
+    bid-aliases: [ ]
+
+#---------------------------------
+# Commands Reference
+#---------------------------------
+# Admin Commands:
+#   /auction start item <time> <start_price>
+#       - Start an item auction with the item in hand
+#
+#   /auction start command <time> <start_price> <command>
+#       - Start a command auction with specified command
+#
+#   /auction cancel
+#       - Cancel the active auction
+#
+#   /auction reload
+#       - Reload the configuration
+#
+# Player Commands:
+#   /bid <amount>
+#       - Place a bid on the active auction
+
+#---------------------------------
+# Scheduled Auctions Configuration
+#---------------------------------
+schedule:
+  # Enable or disable scheduled auctions
+  enabled: true
+
+  # List of scheduled auctions
+  auctions:
+#---------------------------------
+# Monday - Item Auction
+#---------------------------------
+    - day: MONDAY
+      time: "20:00"
+      name: "&bSpecial Diamonds Auction"
+      reward:
+        type: ITEM
+        item:
+          material: DIAMOND
+          amount: 3
+          name: "&bSpecial Diamonds"
+          lore:
+            - "&7These diamonds were won in an auction"
+            - "&7They are very special!"
+        start_price: 500
+
+#---------------------------------
+# Tuesday - Command Auction
+#---------------------------------
+    - day: TUESDAY
+      time: "19:00"
+      name: "&aEmerald Reward Auction"
+      reward:
+        type: COMMAND
+        command: "give %player% emerald 3"
+        start_price: 300
+
+#---------------------------------
+# Wednesday - Item Auction
+#---------------------------------
+    - day: WEDNESDAY
+      time: "18:00"
+      name: "&5Netherite Ingot Auction"
+      reward:
+        type: ITEM
+        item:
+          material: NETHERITE_INGOT
+          amount: 1
+          name: "&5Precious Netherite"
+          lore:
+            - "&7A rare material from the Nether"
+            - "&7Won through an auction"
+        start_price: 1000
+
+#---------------------------------
+# Thursday - Command Auction
+#---------------------------------
+    - day: THURSDAY
+      time: "20:30"
+      name: "&cStrength Effect Auction"
+      reward:
+        type: COMMAND
+        command: "effect give %player% strength 300 1"
+        start_price: 250
+
+#---------------------------------
+# Friday - Command Auction
+#---------------------------------
+    - day: FRIDAY
+      time: "18:30"
+      name: "&bDiamond Reward Auction"
+      reward:
+        type: COMMAND
+        command: "give %player% diamond 5"
+        start_price: 200
+
+#---------------------------------
+# Saturday - Item Auction
+#---------------------------------
+    - day: SATURDAY
+      time: "16:00"
+      name: "&6Golden Apple Auction"
+      reward:
+        type: ITEM
+        item:
+          material: ENCHANTED_GOLDEN_APPLE
+          amount: 2
+          name: "&6Legendary Golden Apples"
+          lore:
+            - "&7These apples grant incredible powers"
+            - "&7Only available through auctions"
+        start_price: 2000
+
+#---------------------------------
+# Sunday - Command Auction
+#---------------------------------
+    - day: SUNDAY
+      time: "17:00"
+      name: "&dExperience Bottle Auction"
+      reward:
+        type: COMMAND
+        command: "give %player% experience_bottle 16"
+        start_price: 400
