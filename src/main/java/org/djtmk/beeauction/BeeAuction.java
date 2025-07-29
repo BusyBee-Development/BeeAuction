@@ -4,13 +4,19 @@ import net.milkbowl.vault.economy.Economy;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.djtmk.beeauction.auctions.AuctionManager;
+import org.djtmk.beeauction.commands.BidCommand;
+import org.djtmk.beeauction.commands.ClaimCommand;
 import org.djtmk.beeauction.commands.GlobalAuctionCommand;
 import org.djtmk.beeauction.commands.GlobalAuctionTabCompleter;
-import org.djtmk.beeauction.commands.BidCommand;
 import org.djtmk.beeauction.config.ConfigManager;
 import org.djtmk.beeauction.data.DatabaseManager;
 import org.djtmk.beeauction.economy.EconomyHandler;
+import org.djtmk.beeauction.listeners.AdminJoinListener;
+import org.djtmk.beeauction.listeners.AuctionChatListener;
+import org.djtmk.beeauction.listeners.ClaimListener;
+import org.djtmk.beeauction.util.UpdateChecker;
 
+import java.util.Objects;
 import java.util.logging.Logger;
 
 public final class BeeAuction extends JavaPlugin {
@@ -20,101 +26,87 @@ public final class BeeAuction extends JavaPlugin {
     private DatabaseManager databaseManager;
     private AuctionManager auctionManager;
     private EconomyHandler economyHandler;
+    private AuctionChatListener auctionChatListener;
+    private UpdateChecker updateChecker;
 
     @Override
     public void onEnable() {
-        // Set instance
         instance = this;
 
-        // Initialize config
         configManager = new ConfigManager(this);
         configManager.loadConfigs();
 
-        // Setup economy
         if (!setupEconomy()) {
-            log.severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
-        // Initialize database
         databaseManager = new DatabaseManager(this);
         databaseManager.initialize();
 
-        // Initialize auction manager
         auctionManager = new AuctionManager(this);
 
-        // Register commands
-        String adminCommandName = configManager.getAdminCommandName();
-        String playerBidCommand = configManager.getPlayerBidCommand();
+        registerListeners();
+        registerCommands();
 
-        // Register admin command
-        if (getCommand(adminCommandName) != null) {
-            getCommand(adminCommandName).setExecutor(new GlobalAuctionCommand(this));
-            getCommand(adminCommandName).setTabCompleter(new GlobalAuctionTabCompleter(this));
-        } else {
-            log.warning("Failed to register admin command: " + adminCommandName + ". Using default command.");
-            getCommand("globalauction").setExecutor(new GlobalAuctionCommand(this));
-            getCommand("globalauction").setTabCompleter(new GlobalAuctionTabCompleter(this));
-        }
+        updateChecker = new UpdateChecker(this, "beeauction"); // Replace with your Modrinth ID
+        updateChecker.check();
 
-        // Register player bid command
-        if (getCommand(playerBidCommand) != null) {
-            getCommand(playerBidCommand).setExecutor(new BidCommand(this));
-        } else {
-            log.warning("Failed to register player bid command: " + playerBidCommand + ". Using default command.");
-            getCommand("podbij").setExecutor(new BidCommand(this));
-        }
-
-        // Log startup
-        log.info(String.format("[%s] - Enabled version %s", getDescription().getName(), getDescription().getVersion()));
+        log.info(String.format("[%s] has been enabled! Version: %s", getDescription().getName(), getDescription().getVersion()));
     }
 
     @Override
     public void onDisable() {
-        // Cancel any active auctions
         if (auctionManager != null) {
             auctionManager.cancelAuction();
         }
-
-        // Close database connections
+        if (auctionChatListener != null) {
+            auctionChatListener.cancelCleanupTask();
+        }
         if (databaseManager != null) {
             databaseManager.shutdown();
         }
-
-        // Log shutdown
-        log.info(String.format("[%s] - Disabled version %s", getDescription().getName(), getDescription().getVersion()));
+        log.info(String.format("[%s] has been disabled.", getDescription().getName()));
     }
 
+    // This method now only looks for "Vault", which is what your fork identifies as.
     private boolean setupEconomy() {
         if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            log.severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));
             return false;
         }
         RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
         if (rsp == null) {
+            log.severe(String.format("[%s] - No economy service found through Vault. Is an economy plugin (e.g. EssentialsX) installed?", getDescription().getName()));
             return false;
         }
         economyHandler = new EconomyHandler(rsp.getProvider());
+        log.info(String.format("[%s] Successfully hooked into economy service: %s", getDescription().getName(), rsp.getProvider().getName()));
         return true;
     }
 
-    public static BeeAuction getInstance() {
-        return instance;
+    private void registerListeners() {
+        auctionChatListener = new AuctionChatListener(this);
+        getServer().getPluginManager().registerEvents(new ClaimListener(this), this);
+        getServer().getPluginManager().registerEvents(new AdminJoinListener(this), this);
     }
 
-    public ConfigManager getConfigManager() {
-        return configManager;
+    private void registerCommands() {
+        String adminCommandName = configManager.getAdminCommandName();
+        GlobalAuctionTabCompleter tabCompleter = new GlobalAuctionTabCompleter(this);
+        Objects.requireNonNull(getCommand(adminCommandName)).setExecutor(new GlobalAuctionCommand(this, auctionChatListener));
+        Objects.requireNonNull(getCommand(adminCommandName)).setTabCompleter(tabCompleter);
+
+        String playerBidCommand = configManager.getPlayerBidCommand();
+        Objects.requireNonNull(getCommand(playerBidCommand)).setExecutor(new BidCommand(this));
+
+        Objects.requireNonNull(getCommand("claim")).setExecutor(new ClaimCommand(this));
     }
 
-    public DatabaseManager getDatabaseManager() {
-        return databaseManager;
-    }
-
-    public AuctionManager getAuctionManager() {
-        return auctionManager;
-    }
-
-    public EconomyHandler getEconomyHandler() {
-        return economyHandler;
-    }
+    public static BeeAuction getInstance() { return instance; }
+    public ConfigManager getConfigManager() { return configManager; }
+    public DatabaseManager getDatabaseManager() { return databaseManager; }
+    public AuctionManager getAuctionManager() { return auctionManager; }
+    public EconomyHandler getEconomyHandler() { return economyHandler; }
+    public UpdateChecker getUpdateChecker() { return updateChecker; }
 }

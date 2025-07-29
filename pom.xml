@@ -6,7 +6,7 @@
 
     <groupId>org.djtmk</groupId>
     <artifactId>BeeAuction</artifactId>
-    <version>1.0</version>
+    <version>1.2</version>
     <packaging>jar</packaging>
 
     <name>BeeAuction</name>
@@ -73,6 +73,10 @@
             <url>https://oss.sonatype.org/content/groups/public/</url>
         </repository>
         <repository>
+            <id>codemc-repo</id>
+            <url>https://repo.codemc.org/repository/maven-public</url>
+        </repository>
+        <repository>
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
         </repository>
@@ -92,6 +96,12 @@
             <version>1.7</version>
             <scope>provided</scope>
         </dependency>
-        <!-- Database dependencies removed - using Paper/Spigot's built-in SQLite driver -->
+        <!-- GSON API -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 </project>

@@ -22,158 +22,70 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
+// UPDATED: This class now uses the new Auction constructors.
 public class AuctionManager {
     private final BeeAuction plugin;
     private Auction activeAuction;
     private AuctionTask auctionTask;
     private BukkitTask scheduledTask;
-    private Map<String, Boolean> startedAuctions = new HashMap<>();
+    private final Map<String, Boolean> startedAuctions = new HashMap<>();
     private DayOfWeek lastCheckedDay;
 
     public AuctionManager(BeeAuction plugin) {
         this.plugin = plugin;
         this.lastCheckedDay = LocalDateTime.now().getDayOfWeek();
 
-        // Schedule auto auctions if enabled
         if (plugin.getConfigManager().isScheduleEnabled()) {
             scheduleAutoAuctions();
         }
     }
 
-    /**
-     * Start an item auction
-     * @param item The item to auction
-     * @param duration The duration in seconds
-     * @param startPrice The starting price
-     * @param customName Optional custom name for the auction
-     * @param ownerName The name of the player who started the auction
-     * @return True if the auction was started
-     */
-    public boolean startItemAuction(ItemStack item, int duration, double startPrice, String customName, String ownerName) {
-        // Check if there's already an active auction
-        if (activeAuction != null && activeAuction.isActive()) {
+    // UPDATED: Now takes a Player object for owner information.
+    public boolean startItemAuction(ItemStack item, int duration, double startPrice, String customName, Player owner) {
+        if (hasActiveAuction()) {
             return false;
         }
-
-        // Create the auction
-        activeAuction = new Auction(plugin, item, startPrice, duration, customName, ownerName);
-
-        // Start the auction
-        activeAuction.start();
-
-        // Start the auction task
-        auctionTask = new AuctionTask(plugin, activeAuction, this);
-        auctionTask.runTaskTimer(plugin, 0, 20); // Run every second
-
+        activeAuction = new Auction(plugin, item, startPrice, duration, customName, owner);
+        startAuction(activeAuction);
         return true;
     }
 
-    /**
-     * Start an item auction
-     * @param item The item to auction
-     * @param duration The duration in seconds
-     * @param startPrice The starting price
-     * @param customName Optional custom name for the auction
-     * @return True if the auction was started
-     */
-    public boolean startItemAuction(ItemStack item, int duration, double startPrice, String customName) {
-        return startItemAuction(item, duration, startPrice, customName, "Unknown");
-    }
-
-    /**
-     * Start an item auction (legacy method for backward compatibility)
-     * @param item The item to auction
-     * @param duration The duration in seconds
-     * @param startPrice The starting price
-     * @return True if the auction was started
-     */
-    public boolean startItemAuction(ItemStack item, int duration, double startPrice) {
-        return startItemAuction(item, duration, startPrice, null, "Unknown");
-    }
-
-    /**
-     * Start a command auction
-     * @param command The command to execute
-     * @param duration The duration in seconds
-     * @param startPrice The starting price
-     * @param customName Optional custom name for the auction
-     * @param ownerName The name of the player who started the auction
-     * @return True if the auction was started
-     */
-    public boolean startCommandAuction(String command, int duration, double startPrice, String customName, String ownerName) {
-        // Check if there's already an active auction
-        if (activeAuction != null && activeAuction.isActive()) {
+    // UPDATED: Now takes a display name for the command reward.
+    public boolean startCommandAuction(String command, String displayName, int duration, double startPrice, String customName, String ownerName) {
+        if (hasActiveAuction()) {
             return false;
         }
-
-        // Create the auction
-        activeAuction = new Auction(plugin, command, startPrice, duration, customName, ownerName);
-
-        // Start the auction
-        activeAuction.start();
-
-        // Start the auction task
-        auctionTask = new AuctionTask(plugin, activeAuction, this);
-        auctionTask.runTaskTimer(plugin, 0, 20); // Run every second
-
+        activeAuction = new Auction(plugin, command, displayName, startPrice, duration, customName, ownerName);
+        startAuction(activeAuction);
         return true;
     }
 
-    /**
-     * Start a command auction
-     * @param command The command to execute
-     * @param duration The duration in seconds
-     * @param startPrice The starting price
-     * @param customName Optional custom name for the auction
-     * @return True if the auction was started
-     */
-    public boolean startCommandAuction(String command, int duration, double startPrice, String customName) {
-        return startCommandAuction(command, duration, startPrice, customName, "Unknown");
-    }
-
-    /**
-     * Start a command auction (legacy method for backward compatibility)
-     * @param command The command to execute
-     * @param duration The duration in seconds
-     * @param startPrice The starting price
-     * @return True if the auction was started
-     */
-    public boolean startCommandAuction(String command, int duration, double startPrice) {
-        return startCommandAuction(command, duration, startPrice, null, "Unknown");
+    // NEW: Central method to start any auction.
+    private void startAuction(Auction auction) {
+        auction.start();
+        auctionTask = new AuctionTask(plugin, auction, this);
+        auctionTask.runTaskTimer(plugin, 0, 20);
     }
 
     public boolean cancelAuction() {
-        if (activeAuction == null || !activeAuction.isActive()) {
+        if (!hasActiveAuction()) {
             return false;
         }
 
-        // Cancel the auction
         activeAuction.cancel();
-
-        // Cancel the task
         if (auctionTask != null) {
             auctionTask.cancelTask();
             auctionTask = null;
         }
-
-        // Clear the active auction
         activeAuction = null;
-
         return true;
     }
 
-    /**
-     * Place a bid on the active auction
-     * @param player The player placing the bid
-     * @param amount The bid amount
-     * @return True if the bid was successful
-     */
     public boolean placeBid(Player player, double amount) {
-        if (activeAuction == null || !activeAuction.isActive()) {
+        if (!hasActiveAuction()) {
             MessageUtil.sendMessage(player, MessageEnum.NO_AUCTION.get());
             return false;
         }
-
         return activeAuction.placeBid(player, amount);
     }
 
@@ -185,232 +97,98 @@ public class AuctionManager {
     public boolean hasActiveAuction() {
         return activeAuction != null && activeAuction.isActive();
     }
+
     public Auction getActiveAuction() {
         return activeAuction;
     }
 
-    /**
-     * Schedule auto auctions
-     * This method is called when the plugin is enabled and when the config is reloaded
-     */
     public void scheduleAutoAuctions() {
         plugin.getLogger().info("Scheduling auto auctions...");
-
-        // Check if scheduled auctions are enabled in the config
         if (!plugin.getConfigManager().isScheduleEnabled()) {
             plugin.getLogger().info("Scheduled auctions are disabled in config.yml");
-
-            // Cancel any existing scheduled task
             if (scheduledTask != null) {
                 scheduledTask.cancel();
                 scheduledTask = null;
-                plugin.getLogger().info("Cancelled existing scheduled auction task");
             }
-
             return;
         }
-
-        // Cancel any existing scheduled task
         if (scheduledTask != null) {
             scheduledTask.cancel();
-            plugin.getLogger().info("Cancelled existing scheduled auction task");
         }
-
-        // Reset the tracking map
         startedAuctions.clear();
-
-        // Reset the last checked day
         lastCheckedDay = LocalDateTime.now().getDayOfWeek();
-
-        // Schedule a task to check for auto auctions every 10 seconds for more precise timing
-        scheduledTask = Bukkit.getScheduler().runTaskTimer(plugin, this::checkScheduledAuctions, 20 * 10, 20 * 10);
-
-        // Immediately check for scheduled auctions
-        Bukkit.getScheduler().runTask(plugin, this::checkScheduledAuctions);
+        scheduledTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkScheduledAuctions, 20 * 10, 20 * 10);
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::checkScheduledAuctions);
     }
 
     private void checkScheduledAuctions() {
-        // Get the current day and time
         LocalDateTime now = LocalDateTime.now();
         DayOfWeek currentDay = now.getDayOfWeek();
         LocalTime currentTime = now.toLocalTime();
 
-        // Check if it's a new day, reset the tracking if it is
         if (lastCheckedDay != currentDay) {
             startedAuctions.clear();
             lastCheckedDay = currentDay;
         }
 
-        // Get the scheduled auctions
-        ConfigurationSection config = plugin.getConfigManager().getConfig();
-        ConfigurationSection scheduleSection = config.getConfigurationSection("schedule");
+        if (hasActiveAuction()) return; // Don't start a scheduled auction if one is already running
 
-        if (scheduleSection == null) {
-            plugin.getLogger().warning("No 'schedule' section found in config.yml");
-            return;
-        }
+        ConfigurationSection scheduleSection = plugin.getConfigManager().getConfig().getConfigurationSection("schedule");
+        if (scheduleSection == null) return;
 
         List<Map<?, ?>> auctionsList = scheduleSection.getMapList("auctions");
+        if (auctionsList.isEmpty()) return;
 
-        if (auctionsList == null || auctionsList.isEmpty()) {
-            plugin.getLogger().warning("No auctions found in schedule.auctions list");
-            return;
-        }
-
-        // Check each scheduled auction
         for (Map<?, ?> auctionMap : auctionsList) {
             try {
-                // Get the day
-                String dayString = (String) auctionMap.get("day");
-                if (dayString == null) {
-                    plugin.getLogger().warning("Scheduled auction missing 'day' field");
-                    continue;
-                }
+                DayOfWeek scheduledDay = DayOfWeek.valueOf(((String) auctionMap.get("day")).toUpperCase());
+                if (scheduledDay != currentDay) continue;
 
-                try {
-                    Day day = Day.valueOf(dayString);
+                String timeString = String.valueOf(auctionMap.get("time"));
+                LocalTime scheduledTime = LocalTime.parse(timeString, DateTimeFormatter.ofPattern("HH:mm"));
 
-                    // Convert to DayOfWeek
-                    DayOfWeek scheduledDay = DayOfWeek.valueOf(day.name());
+                String auctionKey = scheduledDay + "_" + timeString;
+                if (startedAuctions.getOrDefault(auctionKey, false)) continue;
 
-                    // Check if it's the right day
-                    if (scheduledDay != currentDay) {
-                        continue;
-                    }
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Invalid day in scheduled auction: " + dayString);
-                    continue;
-                }
+                long timeDifference = currentTime.toSecondOfDay() - scheduledTime.toSecondOfDay();
+                if (timeDifference < 0 || timeDifference > 30) continue; // Start within 30s of scheduled time
 
-                // Get the time
-                Object timeValue = auctionMap.get("time");
-                String timeString;
-
-                if (timeValue == null) {
-                    plugin.getLogger().warning("Scheduled auction missing 'time' field");
-                    continue;
-                } else if (timeValue instanceof Integer) {
-                    // Convert Integer to String in format HH:mm
-                    int timeInt = (Integer) timeValue;
-                    int hours = timeInt / 100;
-                    int minutes = timeInt % 100;
-                    timeString = String.format("%02d:%02d", hours, minutes);
-                } else if (timeValue instanceof String) {
-                    timeString = (String) timeValue;
-                } else {
-                    plugin.getLogger().warning("Unexpected time format in scheduled auction: " + timeValue + " (type: " + timeValue.getClass().getName() + ")");
-                    timeString = String.valueOf(timeValue);
-                }
-
-                LocalTime scheduledTime;
-                try {
-                    scheduledTime = LocalTime.parse(timeString, DateTimeFormatter.ofPattern("HH:mm"));
-                } catch (DateTimeParseException e) {
-                    plugin.getLogger().warning("Invalid time format in scheduled auction: " + timeString + 
-                            ". Expected format: HH:mm (e.g. 08:25)");
-                    continue;
-                }
-
-                // Create a unique key for this auction
-                String auctionKey = dayString + "_" + timeString;
-
-                // Check if this auction has already been started today
-                if (startedAuctions.containsKey(auctionKey) && startedAuctions.get(auctionKey)) {
-                    continue;
-                }
-
-                // Check if it's the right time (current time should be at or after scheduled time)
-                int timeDifference = currentTime.toSecondOfDay() - scheduledTime.toSecondOfDay();
-
-                // Only start if current time is at or after scheduled time (with a small buffer of 5 seconds)
-                // or if we're within 30 seconds after the scheduled time to avoid missing it
-                if (timeDifference < -5 || timeDifference > 30) {
-                    continue;
-                }
-
-                // Get the reward
-                Map<?, ?> rewardMap = (Map<?, ?>) auctionMap.get("reward");
-                if (rewardMap == null) {
-                    plugin.getLogger().warning("Scheduled auction missing 'reward' field");
-                    continue;
-                }
-
-                // Get the reward type
-                String rewardType = (String) rewardMap.get("type");
-                if (rewardType == null) {
-                    plugin.getLogger().warning("Scheduled auction missing 'reward.type' field");
-                    continue;
-                }
-
-                AuctionType type;
-                try {
-                    type = AuctionType.valueOf(rewardType);
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Invalid reward type in scheduled auction: " + rewardType);
-                    continue;
-                }
-
-                // Get the start price
-                double startPrice = rewardMap.get("start_price") instanceof Number ? 
-                        ((Number) rewardMap.get("start_price")).doubleValue() : 100;
-
-                // Get the auction name
-                String auctionName = (String) auctionMap.get("name");
-                // If no name is provided, use a default name
-                if (auctionName == null || auctionName.isEmpty()) {
-                    auctionName = "Scheduled Auction";
-                }
-
-                // Start the auction
-                if (type == AuctionType.ITEM) {
-                    // Get the item
-                    Map<?, ?> itemMap = (Map<?, ?>) rewardMap.get("item");
-                    if (itemMap == null) {
-                        plugin.getLogger().warning("Scheduled item auction missing 'reward.item' field");
-                        continue;
-                    }
-
-                    // Create a temporary ConfigurationSection for the item
-                    ConfigurationSection itemSection = config.createSection("temp_item");
-                    for (Map.Entry<?, ?> entry : itemMap.entrySet()) {
-                        if (entry.getKey() instanceof String) {
-                            itemSection.set((String) entry.getKey(), entry.getValue());
-                        }
-                    }
-
-                    ItemStack item = ItemUtils.deserializeItem(itemSection);
-                    config.set("temp_item", null); // Clean up
-
-                    if (item != null) {
-                        boolean success = startItemAuction(item, 300, startPrice, auctionName); // 5 minutes
-                        if (!success) {
-                            plugin.getLogger().warning("Failed to start item auction");
-                        }
-                    } else {
-                        plugin.getLogger().warning("Failed to create item for auction");
-                    }
-                } else if (type == AuctionType.COMMAND) {
-                    // Get the command
-                    String command = (String) rewardMap.get("command");
-
-                    if (command == null || command.isEmpty()) {
-                        plugin.getLogger().warning("Scheduled command auction missing or empty 'reward.command' field");
-                        continue;
-                    }
-
-                    boolean success = startCommandAuction(command, 300, startPrice, auctionName); // 5 minutes
-                    if (!success) {
-                        plugin.getLogger().warning("Failed to start command auction");
-                    }
-                }
-
-                // Mark this auction as started
+                // It's time to start this auction
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    startScheduledAuction(auctionMap);
+                });
                 startedAuctions.put(auctionKey, true);
-
-                // Only start one auction at a time
                 break;
-            } catch (IllegalArgumentException | DateTimeParseException e) {
+            } catch (Exception e) {
                 plugin.getLogger().log(Level.WARNING, "Invalid scheduled auction configuration", e);
+            }
+        }
+    }
+
+    private void startScheduledAuction(Map<?, ?> auctionMap) {
+        if (hasActiveAuction()) return; // Double-check on main thread
+
+        Map<?, ?> rewardMap = (Map<?, ?>) auctionMap.get("reward");
+        AuctionType type = AuctionType.valueOf(((String) rewardMap.get("type")).toUpperCase());
+        double startPrice = ((Number) rewardMap.get("start_price")).doubleValue();
+        String auctionName = (String) auctionMap.get("name");
+
+        if (type == AuctionType.ITEM) {
+            ConfigurationSection itemSection = plugin.getConfigManager().getConfig().createSection("temp_item", (Map<?, ?>) rewardMap.get("item"));
+            ItemStack item = ItemUtils.deserializeItem(itemSection);
+            if (item != null) {
+                // For server-run item auctions, there's no player owner. The item simply ceases to exist if there are no bids.
+                // We'll treat this like a command auction where the reward is the item itself.
+                String displayName = ItemUtils.getItemDisplayName(item);
+                String command = "give %player% " + item.getType().getKey().getKey() + " " + item.getAmount(); // This is a representation.
+                startCommandAuction(command, displayName, 300, startPrice, auctionName, "Server");
+            }
+        } else if (type == AuctionType.COMMAND) {
+            String command = (String) rewardMap.get("command");
+            // UPDATED: Get the explicit display name from the config.
+            String displayName = (String) rewardMap.get("display-name");
+            if (command != null && !command.isEmpty()) {
+                startCommandAuction(command, displayName, 300, startPrice, auctionName, "Server");
             }
         }
     }

@@ -7,38 +7,41 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.config.MessageEnum;
+import org.djtmk.beeauction.listeners.AuctionChatListener;
 import org.djtmk.beeauction.util.MessageUtil;
 
+// This class should NOT contain any other public class definitions.
 public class GlobalAuctionCommand implements CommandExecutor {
     private final BeeAuction plugin;
-    private final org.djtmk.beeauction.listeners.AuctionChatListener chatListener;
+    private final AuctionChatListener chatListener;
 
-    public GlobalAuctionCommand(BeeAuction plugin) {
+    public GlobalAuctionCommand(BeeAuction plugin, AuctionChatListener chatListener) {
         this.plugin = plugin;
-        this.chatListener = new org.djtmk.beeauction.listeners.AuctionChatListener(plugin);
+        this.chatListener = chatListener;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        // Check permission
         if (!sender.hasPermission("auction.admin")) {
-            MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, MessageEnum.NO_PERMISSION.get());
+            String noPermMsg = MessageEnum.NO_PERMISSION.get();
+            if (sender instanceof Player) {
+                MessageUtil.sendMessage((Player) sender, noPermMsg);
+            } else {
+                sender.sendMessage(MessageUtil.colorize(noPermMsg));
+            }
             return true;
         }
 
-        // Check if there are any arguments
         if (args.length == 0) {
             sendUsage(sender);
             return true;
         }
 
-        // Get custom subcommands from config
         String startCmd = plugin.getConfigManager().getAdminSubcommandStart();
         String cancelCmd = plugin.getConfigManager().getAdminSubcommandCancel();
         String reloadCmd = plugin.getConfigManager().getAdminSubcommandReload();
-
-        // Handle subcommands
         String subCmd = args[0].toLowerCase();
+
         if (subCmd.equals(startCmd)) {
             handleStart(sender, args);
         } else if (subCmd.equals(cancelCmd)) {
@@ -48,163 +51,108 @@ public class GlobalAuctionCommand implements CommandExecutor {
         } else {
             sendUsage(sender);
         }
-
         return true;
     }
 
     private void handleStart(CommandSender sender, String[] args) {
-        // Check if there's already an active auction
+        if (!(sender instanceof Player)) {
+            sender.sendMessage("§cOnly players can start auctions from in-game.");
+            return;
+        }
+        Player player = (Player) sender;
+
         if (plugin.getAuctionManager().hasActiveAuction()) {
-            MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, MessageEnum.AUCTION_ALREADY_ACTIVE.get());
+            MessageUtil.sendMessage(player, MessageEnum.AUCTION_ALREADY_ACTIVE.get());
             return;
         }
 
-        // Check if there are enough arguments
         if (args.length < 4) {
-            sendUsage(sender);
+            sendUsage(player);
             return;
         }
 
-        // Get custom auction types from config
         String itemType = plugin.getConfigManager().getAdminAuctionTypeItem();
         String commandType = plugin.getConfigManager().getAdminAuctionTypeCommand();
-
-        // Get the auction type
         String type = args[1].toLowerCase();
 
-        // Get the duration
         int duration;
-        try {
-            duration = Integer.parseInt(args[2]);
-            if (duration <= 0) {
-                throw new NumberFormatException();
-            }
-        } catch (NumberFormatException e) {
-            MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, MessageEnum.INVALID_COMMAND.get());
-            return;
-        }
-
-        // Get the start price
         double startPrice;
         try {
+            duration = Integer.parseInt(args[2]);
             startPrice = Double.parseDouble(args[3]);
-            if (startPrice <= 0) {
-                throw new NumberFormatException();
-            }
+            if (duration <= 0 || startPrice < 0) throw new NumberFormatException();
         } catch (NumberFormatException e) {
-            MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, MessageEnum.INVALID_COMMAND.get());
+            MessageUtil.sendMessage(player, MessageEnum.INVALID_COMMAND.get());
             return;
         }
 
-        // Handle item auction
         if (type.equals(itemType)) {
-            // Check if the sender is a player
-            if (!(sender instanceof Player)) {
-                MessageUtil.sendMessage(null, "§cOnly players can start item auctions");
-                return;
-            }
-
-            // Get the item in hand
-            Player player = (Player) sender;
-            ItemStack item = player.getInventory().getItemInMainHand();
-
-            // Check if the item is valid
-            if (item == null || item.getType().isAir()) {
-                MessageUtil.sendMessage(player, "§cYou must hold an item to auction");
-                return;
-            }
-
-            // Ask for auction name
-            MessageUtil.sendMessage(player, MessageEnum.AUCTION_NAME_QUESTION.get());
-            chatListener.addPendingItemAuction(player, item.clone(), duration, startPrice);
-
-            // The auction will be started by the chat listener when the player enters a name
-            // We'll remove the item from the player's hand now
-            item.setAmount(0);
-            player.getInventory().setItemInMainHand(item);
+            handleItemAuctionStart(player, duration, startPrice);
+        } else if (type.equals(commandType)) {
+            handleCommandAuctionStart(player, args, duration, startPrice);
+        } else {
+            sendUsage(player);
         }
-        // Handle command auction
-        else if (type.equals(commandType)) {
-            // Check if there are enough arguments
-            if (args.length < 5) {
-                sendUsage(sender);
-                return;
-            }
+    }
 
-            // Check if the sender is a player
-            if (!(sender instanceof Player)) {
-                MessageUtil.sendMessage(null, "§cOnly players can start command auctions");
-                return;
-            }
-
-            Player player = (Player) sender;
-
-            // Get the command
-            StringBuilder commandBuilder = new StringBuilder();
-            for (int i = 4; i < args.length; i++) {
-                commandBuilder.append(args[i]).append(" ");
-            }
-            String auctionCommand = commandBuilder.toString().trim();
-
-            // Ask for auction name
-            MessageUtil.sendMessage(player, MessageEnum.AUCTION_NAME_QUESTION.get());
-            chatListener.addPendingCommandAuction(player, auctionCommand, duration, startPrice);
-
-            // The auction will be started by the chat listener when the player enters a name
+    private void handleItemAuctionStart(Player player, int duration, double startPrice) {
+        ItemStack item = player.getInventory().getItemInMainHand();
+        if (item.getType().isAir()) {
+            MessageUtil.sendMessage(player, "§cYou must hold an item in your hand to auction it.");
+            return;
         }
-        // Invalid auction type
-        else {
-            sendUsage(sender);
+
+        player.getInventory().setItemInMainHand(null);
+        chatListener.addPendingItemAuction(player, item, duration, startPrice);
+        MessageUtil.sendMessage(player, MessageEnum.AUCTION_NAME_QUESTION.get());
+    }
+
+    private void handleCommandAuctionStart(Player player, String[] args, int duration, double startPrice) {
+        if (args.length < 5) {
+            sendUsage(player);
+            return;
         }
+
+        StringBuilder commandBuilder = new StringBuilder();
+        for (int i = 4; i < args.length; i++) {
+            commandBuilder.append(args[i]).append(" ");
+        }
+        String auctionCommand = commandBuilder.toString().trim();
+
+        chatListener.addPendingCommandAuction(player, auctionCommand, duration, startPrice);
+        MessageUtil.sendMessage(player, MessageEnum.COMMAND_DISPLAY_NAME_QUESTION.get());
     }
 
     private void handleCancel(CommandSender sender) {
-        // Check if there's an active auction
-        if (!plugin.getAuctionManager().hasActiveAuction()) {
-            MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, MessageEnum.NO_AUCTION.get());
-            return;
+        if (!plugin.getAuctionManager().cancelAuction()) {
+            sender.sendMessage("§c" + MessageEnum.NO_AUCTION.get());
+        } else {
+            sender.sendMessage("§aAuction successfully cancelled.");
         }
-
-        // Cancel the auction
-        plugin.getAuctionManager().cancelAuction();
-
-        // Send success message
-        MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, "§aAuction cancelled");
     }
 
     private void handleReload(CommandSender sender) {
-        // Reload the config
         plugin.getConfigManager().reloadConfigs();
-
-        // Reschedule auto auctions
-        if (plugin.getConfigManager().isScheduleEnabled()) {
-            plugin.getAuctionManager().scheduleAutoAuctions();
-            plugin.getLogger().info("Rescheduled auto auctions after config reload");
-        }
-
-        // Send success message
-        MessageUtil.sendMessage(sender instanceof Player ? (Player) sender : null, MessageEnum.RELOAD_SUCCESS.get());
+        plugin.getAuctionManager().scheduleAutoAuctions();
+        sender.sendMessage("§a" + MessageEnum.RELOAD_SUCCESS.get());
     }
 
     private void sendUsage(CommandSender sender) {
-        if (sender instanceof Player) {
-            Player player = (Player) sender;
+        String adminCmd = plugin.getConfigManager().getAdminCommandName();
+        String startCmd = plugin.getConfigManager().getAdminSubcommandStart();
+        String cancelCmd = plugin.getConfigManager().getAdminSubcommandCancel();
+        String reloadCmd = plugin.getConfigManager().getAdminSubcommandReload();
+        String itemType = plugin.getConfigManager().getAdminAuctionTypeItem();
+        String commandType = plugin.getConfigManager().getAdminAuctionTypeCommand();
 
-            // Get custom commands from config
-            String adminCmd = plugin.getConfigManager().getAdminCommandName();
-            String startCmd = plugin.getConfigManager().getAdminSubcommandStart();
-            String cancelCmd = plugin.getConfigManager().getAdminSubcommandCancel();
-            String reloadCmd = plugin.getConfigManager().getAdminSubcommandReload();
-            String itemType = plugin.getConfigManager().getAdminAuctionTypeItem();
-            String commandType = plugin.getConfigManager().getAdminAuctionTypeCommand();
-
-            MessageUtil.sendMessage(player, "§6GlobalAuction Commands:");
-            MessageUtil.sendMessage(player, "§e/" + adminCmd + " " + startCmd + " " + itemType + " <time> <start_price> §7- Start an item auction with the item in your hand");
-            MessageUtil.sendMessage(player, "§e/" + adminCmd + " " + startCmd + " " + commandType + " <time> <start_price> <command> §7- Start a command auction");
-            MessageUtil.sendMessage(player, "§e/" + adminCmd + " " + cancelCmd + " §7- Cancel the active auction");
-            MessageUtil.sendMessage(player, "§e/" + adminCmd + " " + reloadCmd + " §7- Reload the config");
-            MessageUtil.sendMessage(player, "§7Note: You will be asked to provide a name for the auction after starting it.");
-            MessageUtil.sendMessage(player, "");
-        }
+        sender.sendMessage(MessageUtil.colorize("&6&lGlobalAuction Commands:"));
+        sender.sendMessage(MessageUtil.colorize(" &e/" + adminCmd + " " + startCmd + " " + itemType + " <time> <start_price>"));
+        sender.sendMessage(MessageUtil.colorize("   &7- Starts an auction for the item in your hand."));
+        sender.sendMessage(MessageUtil.colorize(" &e/" + adminCmd + " " + startCmd + " " + commandType + " <time> <start_price> <command>"));
+        sender.sendMessage(MessageUtil.colorize("   &7- Starts an auction for a command."));
+        sender.sendMessage(MessageUtil.colorize(" &e/" + adminCmd + " " + cancelCmd));
+        sender.sendMessage(MessageUtil.colorize("   &7- Cancels the active auction."));
+        sender.sendMessage(MessageUtil.colorize(" &e/" + adminCmd + " " + reloadCmd));
+        sender.sendMessage(MessageUtil.colorize("   &7- Reloads the plugin's configuration files."));
     }
 }
