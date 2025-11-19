@@ -1,19 +1,23 @@
 package org.djtmk.beeauction;
 
-import net.milkbowl.vault.economy.Economy;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.djtmk.beeauction.api.BeeAuctionAPI;
+import org.djtmk.beeauction.auctions.AuctionCreationManager;
 import org.djtmk.beeauction.auctions.AuctionManager;
+import org.djtmk.beeauction.auctions.BidManager;
 import org.djtmk.beeauction.commands.BidCommand;
 import org.djtmk.beeauction.commands.ClaimCommand;
 import org.djtmk.beeauction.commands.GlobalAuctionCommand;
 import org.djtmk.beeauction.commands.GlobalAuctionTabCompleter;
 import org.djtmk.beeauction.config.ConfigManager;
-import org.djtmk.beeauction.data.DatabaseManager;
-import org.djtmk.beeauction.economy.EconomyHandler;
+import org.djtmk.beeauction.hooks.PlaceholderHook;
+import org.djtmk.beeauction.mysql.AsyncDatabaseManager;
+import org.djtmk.beeauction.mysql.DatabaseManagerFactory;
+import org.djtmk.beeauction.economy.EconomyManager;
 import org.djtmk.beeauction.listeners.AdminJoinListener;
-import org.djtmk.beeauction.listeners.AuctionChatListener;
+import org.djtmk.beeauction.listeners.AuctionCreationListener;
 import org.djtmk.beeauction.listeners.ClaimListener;
+import org.djtmk.beeauction.listeners.GUIListener;
 import org.djtmk.beeauction.util.UpdateChecker;
 
 import java.util.Objects;
@@ -23,10 +27,11 @@ public final class BeeAuction extends JavaPlugin {
     private static BeeAuction instance;
     private static final Logger log = Logger.getLogger("Minecraft");
     private ConfigManager configManager;
-    private DatabaseManager databaseManager;
+    private AsyncDatabaseManager databaseManager;
     private AuctionManager auctionManager;
-    private EconomyHandler economyHandler;
-    private AuctionChatListener auctionChatListener;
+    private EconomyManager economyManager;
+    private AuctionCreationListener auctionCreationListener;
+    private BidManager bidManager;
     private UpdateChecker updateChecker;
 
     @Override
@@ -34,17 +39,32 @@ public final class BeeAuction extends JavaPlugin {
         instance = this;
 
         configManager = new ConfigManager(this);
-        configManager.loadConfigs();
-
-        if (!setupEconomy()) {
+        if (!configManager.loadConfigs()) {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
-        databaseManager = new DatabaseManager(this);
+        economyManager = new EconomyManager();
+        if (!economyManager.isAvailable()) {
+            log.severe(String.format("[%s] - Disabled due to no supported economy plugin found!", getDescription().getName()));
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        log.info(String.format("[%s] Successfully hooked into economy service: %s", getDescription().getName(), economyManager.getProviderName()));
+
+        databaseManager = new DatabaseManagerFactory(this).createDatabaseManager();
         databaseManager.initialize();
 
         auctionManager = new AuctionManager(this);
+        auctionCreationListener = new AuctionCreationListener(this);
+        bidManager = new BidManager(this);
+
+        BeeAuctionAPI.setPlugin(this);
+
+        if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            new PlaceholderHook(this).register();
+            log.info("[BeeAuction] PlaceholderAPI hook enabled.");
+        }
 
         registerListeners();
         registerCommands();
@@ -60,41 +80,23 @@ public final class BeeAuction extends JavaPlugin {
         if (auctionManager != null) {
             auctionManager.cancelAuction();
         }
-        if (auctionChatListener != null) {
-            auctionChatListener.cancelCleanupTask();
-        }
         if (databaseManager != null) {
             databaseManager.shutdown();
         }
         log.info(String.format("[%s] has been disabled.", getDescription().getName()));
     }
 
-    // This method now only looks for "Vault", which is what your fork identifies as.
-    private boolean setupEconomy() {
-        if (getServer().getPluginManager().getPlugin("Vault") == null) {
-            log.severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));
-            return false;
-        }
-        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
-        if (rsp == null) {
-            log.severe(String.format("[%s] - No economy service found through Vault. Is an economy plugin (e.g. EssentialsX) installed?", getDescription().getName()));
-            return false;
-        }
-        economyHandler = new EconomyHandler(rsp.getProvider());
-        log.info(String.format("[%s] Successfully hooked into economy service: %s", getDescription().getName(), rsp.getProvider().getName()));
-        return true;
-    }
-
     private void registerListeners() {
-        auctionChatListener = new AuctionChatListener(this);
         getServer().getPluginManager().registerEvents(new ClaimListener(this), this);
         getServer().getPluginManager().registerEvents(new AdminJoinListener(this), this);
+        getServer().getPluginManager().registerEvents(new GUIListener(), this);
+        getServer().getPluginManager().registerEvents(auctionCreationListener, this);
     }
 
     private void registerCommands() {
         String adminCommandName = configManager.getAdminCommandName();
         GlobalAuctionTabCompleter tabCompleter = new GlobalAuctionTabCompleter(this);
-        Objects.requireNonNull(getCommand(adminCommandName)).setExecutor(new GlobalAuctionCommand(this, auctionChatListener));
+        Objects.requireNonNull(getCommand(adminCommandName)).setExecutor(new GlobalAuctionCommand(this, auctionCreationListener.getCreationManager()));
         Objects.requireNonNull(getCommand(adminCommandName)).setTabCompleter(tabCompleter);
 
         String playerBidCommand = configManager.getPlayerBidCommand();
@@ -105,8 +107,10 @@ public final class BeeAuction extends JavaPlugin {
 
     public static BeeAuction getInstance() { return instance; }
     public ConfigManager getConfigManager() { return configManager; }
-    public DatabaseManager getDatabaseManager() { return databaseManager; }
+    public AsyncDatabaseManager getDatabaseManager() { return databaseManager; }
     public AuctionManager getAuctionManager() { return auctionManager; }
-    public EconomyHandler getEconomyHandler() { return economyHandler; }
+    public EconomyManager getEconomyManager() { return economyManager; }
+    public AuctionCreationManager getAuctionCreationManager() { return auctionCreationListener.getCreationManager(); }
+    public BidManager getBidManager() { return bidManager; }
     public UpdateChecker getUpdateChecker() { return updateChecker; }
 }

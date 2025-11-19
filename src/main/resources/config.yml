@@ -4,6 +4,21 @@
 #    By: BusyBee Development      #
 ###################################
 
+config-version: 1
+
+#---------------------------------
+# Database Configuration
+#---------------------------------
+database:
+  # Type of database to use. Can be "sqlite" or "mysql".
+  type: sqlite
+  # MySQL/MariaDB settings (only used if type is "mysql").
+  host: "localhost"
+  port: 3306
+  database: "beeauction"
+  username: "root"
+  password: ""
+
 #---------------------------------
 # Auction Configuration
 #---------------------------------
@@ -20,13 +35,6 @@ auction:
   # NEW: The tax rate (e.g., 0.05 = 5%) to take from the final sale price of player-started auctions.
   # The seller receives the final price minus this tax. Set to 0 to disable.
   sales-tax-rate: 0.05
-
-#---------------------------------
-# Storage Configuration
-#---------------------------------
-storage:
-  # Currently only SQLITE is supported.
-  type: SQLITE
 
 #---------------------------------
 # Commands Configuration

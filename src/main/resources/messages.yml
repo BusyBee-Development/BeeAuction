@@ -1,33 +1,48 @@
-# GlobalAuction Messages
+# BeeAuction Messages
 
-# Auction messages
-auction-started: "&#00FF00[!] Auction started for {item} &#00FF00Starting at {price} &#00FF00!"
-new-bid: "&#FFD700{player} has bid {amount} &#FFD700!{time_extension}"
-outbid: "&#FF0000You have been outbid by {player} &#FF0000!"
-win: "&#00FF00Congrats! You won the auction for {item} &#00FF00!"
-cancelled: "&#FF5555Auction cancelled: {reason}"
-no-auction: "&#AAAAAAThere is no active auction."
-auction-ended: "&#00FF00Auction ended! {player} &#00FF00won {item} &#00FF00for {amount} &#00FF00!"
+# General
+prefix: "&e[BeeAuction] "
+no-permission: "{prefix}&cYou don't have permission to use this command."
+invalid-command: "{prefix}&cInvalid command usage."
+reload-success: "{prefix}&aConfiguration reloaded successfully."
 
-# Error messages
-no-permission: "&#FF0000You don't have permission to use this command."
-invalid-amount: "&#FF0000Invalid amount. Minimum bid is {amount}&#FF0000."
-not-enough-money: "&#FF0000You don't have enough money."
-auction-already-active: "&#FF0000There is already an active auction."
-invalid-command: "&#FF0000Invalid command usage."
+# Auction Lifecycle
+auction-started: "{prefix}&aAn auction has started for &e{item}&a! Starting bid is &e{price}&a."
+auction-ended: "{prefix}&aThe auction for &e{item}&a has ended! &e{player}&a won with a bid of &e{amount}&a."
+auction-cancelled: "{prefix}&cThe auction has been cancelled: &e{reason}"
+no-auction: "{prefix}&cThere is no active auction."
+auction-already-active: "{prefix}&cAn auction is already active."
 
-# Success messages
-reload-success: "&#00FF00Configuration reloaded successfully."
+# Bidding
+new-bid: "{prefix}&e{player}&a has placed a bid of &e{amount}&a!{time_extension}"
+outbid: "{prefix}&cYou have been outbid by &e{player}&c!"
+not-enough-money: "{prefix}&cYou don't have enough money to place that bid."
+invalid-amount: "{prefix}&cInvalid bid amount. The minimum bid is &e{amount}&c."
+min-increment-not-met: "{prefix}&cYour bid must be at least &e{amount}&c higher than the current bid."
 
-# Auction name questions
-auction-name-question: "&#00FFFF[!] Please enter a name for this auction in chat (or type 'cancel'):"
-command-display-name-question: "&#00FFFF[!] Please enter a display name for the command reward (e.g., '&b5 Diamonds', or type 'cancel'):"
+# Auction Creation
+auction-name-question: "{prefix}&aPlease enter a name for this auction in chat (or type 'cancel')."
+command-display-name-question: "{prefix}&aPlease enter a display name for the command reward (e.g., '&b5 Diamonds', or type 'cancel')."
+item-auction-created: "{prefix}&aYou have successfully created an item auction."
+command-auction-created: "{prefix}&aYou have successfully created a command auction."
 
-# Time extension message
-time-extension: " &#00FF00Time extended by {seconds} seconds."
+# Time Extension
+time-extension: " &aTime has been extended by &e{seconds}&a seconds."
 
-# NEW: Messages for the claim system
-claim-success: "&aYou have successfully claimed {count} item(s)."
-claim-fail: "&cYou have no pending items to claim."
-claim-inventory-full: "&eYour inventory is full! An item was dropped at your feet."
-claim-join-notification: "&6[!] &eYou have pending items from an auction! Type &a/claim &eto retrieve them."
+# Claim System
+claim-success: "{prefix}&aYou have successfully claimed &e{count}&a item(s)."
+claim-fail: "{prefix}&cYou have no pending items to claim."
+claim-inventory-full: "{prefix}&eYour inventory is full! An item was dropped at your feet."
+claim-join-notification: "{prefix}&eYou have pending items from an auction! Type &a/claim&e to retrieve them."
+
+# GUI
+gui-title: "BeeAuction - Page {page}"
+prev-page: "&aPrevious Page"
+next-page: "&aNext Page"
+filter-button: "&aFilter"
+search-button: "&aSearch"
+categories-button: "&aCategories"
+history-button: "&aAuction History"
+bid-button: "&aClick to bid!"
+win-message: "&aCongratulations! You won the auction for &e{item}&a for &e{amount}&a."
+lose-message: "&cYou lost the auction for &e{item}&c. The winning bid was &e{amount}&c."

@@ -3,7 +3,6 @@ package org.djtmk.beeauction.config;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.djtmk.beeauction.BeeAuction;
-import org.djtmk.beeauction.config.AuctionEnum.StorageType;
 import org.djtmk.beeauction.util.MessageUtil;
 
 import java.io.File;
@@ -20,15 +19,19 @@ public class ConfigManager {
     private FileConfiguration messagesConfig;
     private File configFile;
     private File messagesFile;
+    private final ConfigMigrator migrator;
+    private final ConfigValidator validator;
 
     private static ConfigManager instance;
 
     public ConfigManager(BeeAuction plugin) {
         this.plugin = plugin;
+        this.migrator = new ConfigMigrator(plugin);
+        this.validator = new ConfigValidator(plugin);
         instance = this;
     }
 
-    public void loadConfigs() {
+    public boolean loadConfigs() {
         // Create config directory if it doesn't exist
         if (!plugin.getDataFolder().exists()) {
             plugin.getDataFolder().mkdir();
@@ -40,6 +43,15 @@ public class ConfigManager {
             plugin.saveResource("config.yml", false);
         }
         config = YamlConfiguration.loadConfiguration(configFile);
+        plugin.saveDefaultConfig();
+        config.setDefaults(plugin.getConfig());
+
+
+        // Migrate and validate
+        migrator.migrate();
+        if (!validator.validate()) {
+            return false;
+        }
 
         // Load messages config
         messagesFile = new File(plugin.getDataFolder(), "messages.yml");
@@ -50,6 +62,7 @@ public class ConfigManager {
 
         // Compare with defaults
         matchConfigWithDefaults();
+        return true;
     }
 
     public void reloadConfigs() {
@@ -132,10 +145,6 @@ public class ConfigManager {
         return message;
     }
 
-    public StorageType getStorageType() {
-        // Always return SQLITE as it's the only supported storage type now
-        return StorageType.SQLITE;
-    }
     public boolean isScheduleEnabled() {
         return config.getBoolean("schedule.enabled", false);
     }

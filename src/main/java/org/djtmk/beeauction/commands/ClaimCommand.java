@@ -26,22 +26,22 @@ public class ClaimCommand implements CommandExecutor {
         }
 
         Player player = (Player) sender;
-        List<ItemStack> rewards = plugin.getDatabaseManager().getAndRemovePendingRewards(player.getUniqueId());
-
-        if (rewards.isEmpty()) {
-            player.sendMessage(MessageEnum.CLAIM_FAIL.get());
-            return true;
-        }
-
-        player.sendMessage(MessageEnum.CLAIM_SUCCESS.get("count", String.valueOf(rewards.size())));
-        Map<Integer, ItemStack> couldNotFit = player.getInventory().addItem(rewards.toArray(new ItemStack[0]));
-
-        if (!couldNotFit.isEmpty()) {
-            player.sendMessage(MessageEnum.CLAIM_INVENTORY_FULL.get());
-            for (ItemStack leftover : couldNotFit.values()) {
-                player.getWorld().dropItem(player.getLocation(), leftover);
+        plugin.getDatabaseManager().getAndRemovePendingRewards(player.getUniqueId()).thenAccept(rewards -> {
+            if (rewards.isEmpty()) {
+                player.sendMessage(MessageEnum.CLAIM_FAIL.get());
+                return;
             }
-        }
+
+            player.sendMessage(MessageEnum.CLAIM_SUCCESS.get("count", String.valueOf(rewards.size())));
+            Map<Integer, ItemStack> couldNotFit = player.getInventory().addItem(rewards.toArray(new ItemStack[0]));
+
+            if (!couldNotFit.isEmpty()) {
+                player.sendMessage(MessageEnum.CLAIM_INVENTORY_FULL.get());
+                for (ItemStack leftover : couldNotFit.values()) {
+                    player.getWorld().dropItem(player.getLocation(), leftover);
+                }
+            }
+        });
         return true;
     }
 }

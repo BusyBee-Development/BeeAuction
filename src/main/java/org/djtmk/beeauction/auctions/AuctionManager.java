@@ -1,5 +1,7 @@
 package org.djtmk.beeauction.auctions;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
@@ -7,8 +9,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
 import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.config.AuctionEnum.AuctionType;
-import org.djtmk.beeauction.config.AuctionEnum.Day;
 import org.djtmk.beeauction.config.MessageEnum;
+import org.djtmk.beeauction.events.AuctionStartEvent;
 import org.djtmk.beeauction.util.ItemUtils;
 import org.djtmk.beeauction.util.MessageUtil;
 
@@ -16,59 +18,66 @@ import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
-// UPDATED: This class now uses the new Auction constructors.
 public class AuctionManager {
     private final BeeAuction plugin;
-    private Auction activeAuction;
+    private final Cache<String, Auction> auctionCache;
     private AuctionTask auctionTask;
     private BukkitTask scheduledTask;
     private final Map<String, Boolean> startedAuctions = new HashMap<>();
     private DayOfWeek lastCheckedDay;
+    private static final String ACTIVE_AUCTION_KEY = "active_auction";
 
     public AuctionManager(BeeAuction plugin) {
         this.plugin = plugin;
         this.lastCheckedDay = LocalDateTime.now().getDayOfWeek();
+
+        this.auctionCache = CacheBuilder.newBuilder()
+                .maximumSize(1)
+                .expireAfterWrite(2, TimeUnit.HOURS)
+                .build();
 
         if (plugin.getConfigManager().isScheduleEnabled()) {
             scheduleAutoAuctions();
         }
     }
 
-    // UPDATED: Now takes a Player object for owner information.
     public boolean startItemAuction(ItemStack item, int duration, double startPrice, String customName, Player owner) {
         if (hasActiveAuction()) {
             return false;
         }
-        activeAuction = new Auction(plugin, item, startPrice, duration, customName, owner);
-        startAuction(activeAuction);
+        Auction auction = new Auction(plugin, item, startPrice, duration, customName, owner);
+        startAuction(auction);
         return true;
     }
 
-    // UPDATED: Now takes a display name for the command reward.
     public boolean startCommandAuction(String command, String displayName, int duration, double startPrice, String customName, String ownerName) {
         if (hasActiveAuction()) {
             return false;
         }
-        activeAuction = new Auction(plugin, command, displayName, startPrice, duration, customName, ownerName);
-        startAuction(activeAuction);
+        Auction auction = new Auction(plugin, command, displayName, startPrice, duration, customName, ownerName);
+        startAuction(auction);
         return true;
     }
 
-    // NEW: Central method to start any auction.
     private void startAuction(Auction auction) {
+        AuctionStartEvent startEvent = new AuctionStartEvent(auction);
+        Bukkit.getPluginManager().callEvent(startEvent);
+
         auction.start();
+        auctionCache.put(ACTIVE_AUCTION_KEY, auction);
         auctionTask = new AuctionTask(plugin, auction, this);
-        auctionTask.runTaskTimer(plugin, 0, 20);
+        auctionTask.runTaskTimerAsynchronously(plugin, 0, 20);
     }
 
     public boolean cancelAuction() {
-        if (!hasActiveAuction()) {
+        Auction activeAuction = getActiveAuction();
+        if (activeAuction == null) {
             return false;
         }
 
@@ -77,12 +86,13 @@ public class AuctionManager {
             auctionTask.cancelTask();
             auctionTask = null;
         }
-        activeAuction = null;
+        clearActiveAuction();
         return true;
     }
 
     public boolean placeBid(Player player, double amount) {
-        if (!hasActiveAuction()) {
+        Auction activeAuction = getActiveAuction();
+        if (activeAuction == null) {
             MessageUtil.sendMessage(player, MessageEnum.NO_AUCTION.get());
             return false;
         }
@@ -90,16 +100,17 @@ public class AuctionManager {
     }
 
     public void clearActiveAuction() {
-        activeAuction = null;
+        auctionCache.invalidate(ACTIVE_AUCTION_KEY);
         auctionTask = null;
     }
 
     public boolean hasActiveAuction() {
-        return activeAuction != null && activeAuction.isActive();
+        Auction auction = auctionCache.getIfPresent(ACTIVE_AUCTION_KEY);
+        return auction != null && auction.isActive();
     }
 
     public Auction getActiveAuction() {
-        return activeAuction;
+        return auctionCache.getIfPresent(ACTIVE_AUCTION_KEY);
     }
 
     public void scheduleAutoAuctions() {
@@ -131,7 +142,7 @@ public class AuctionManager {
             lastCheckedDay = currentDay;
         }
 
-        if (hasActiveAuction()) return; // Don't start a scheduled auction if one is already running
+        if (hasActiveAuction()) return;
 
         ConfigurationSection scheduleSection = plugin.getConfigManager().getConfig().getConfigurationSection("schedule");
         if (scheduleSection == null) return;
@@ -151,12 +162,9 @@ public class AuctionManager {
                 if (startedAuctions.getOrDefault(auctionKey, false)) continue;
 
                 long timeDifference = currentTime.toSecondOfDay() - scheduledTime.toSecondOfDay();
-                if (timeDifference < 0 || timeDifference > 30) continue; // Start within 30s of scheduled time
+                if (timeDifference < 0 || timeDifference > 30) continue;
 
-                // It's time to start this auction
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    startScheduledAuction(auctionMap);
-                });
+                Bukkit.getScheduler().runTask(plugin, () -> startScheduledAuction(auctionMap));
                 startedAuctions.put(auctionKey, true);
                 break;
             } catch (Exception e) {
@@ -166,7 +174,7 @@ public class AuctionManager {
     }
 
     private void startScheduledAuction(Map<?, ?> auctionMap) {
-        if (hasActiveAuction()) return; // Double-check on main thread
+        if (hasActiveAuction()) return;
 
         Map<?, ?> rewardMap = (Map<?, ?>) auctionMap.get("reward");
         AuctionType type = AuctionType.valueOf(((String) rewardMap.get("type")).toUpperCase());
@@ -177,15 +185,12 @@ public class AuctionManager {
             ConfigurationSection itemSection = plugin.getConfigManager().getConfig().createSection("temp_item", (Map<?, ?>) rewardMap.get("item"));
             ItemStack item = ItemUtils.deserializeItem(itemSection);
             if (item != null) {
-                // For server-run item auctions, there's no player owner. The item simply ceases to exist if there are no bids.
-                // We'll treat this like a command auction where the reward is the item itself.
                 String displayName = ItemUtils.getItemDisplayName(item);
-                String command = "give %player% " + item.getType().getKey().getKey() + " " + item.getAmount(); // This is a representation.
+                String command = "give %player% " + item.getType().getKey().getKey() + " " + item.getAmount();
                 startCommandAuction(command, displayName, 300, startPrice, auctionName, "Server");
             }
         } else if (type == AuctionType.COMMAND) {
             String command = (String) rewardMap.get("command");
-            // UPDATED: Get the explicit display name from the config.
             String displayName = (String) rewardMap.get("display-name");
             if (command != null && !command.isEmpty()) {
                 startCommandAuction(command, displayName, 300, startPrice, auctionName, "Server");

@@ -6,13 +6,13 @@ import org.bukkit.inventory.ItemStack;
 import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.config.AuctionEnum.AuctionType;
 import org.djtmk.beeauction.config.MessageEnum;
+import org.djtmk.beeauction.events.AuctionBidEvent;
 import org.djtmk.beeauction.util.ItemUtils;
 import org.djtmk.beeauction.util.MessageUtil;
 
 import java.util.Map;
 import java.util.UUID;
 
-// UPDATED: This class has been significantly refactored for robustness and new features.
 public class Auction {
     private final BeeAuction plugin;
     private final AuctionType type;
@@ -30,7 +30,6 @@ public class Auction {
     private boolean active;
     private long endTime;
 
-    // UPDATED: Main constructor for player-started item auctions
     public Auction(BeeAuction plugin, ItemStack item, double startPrice, int duration, String customName, Player owner) {
         this.plugin = plugin;
         this.type = AuctionType.ITEM;
@@ -47,7 +46,6 @@ public class Auction {
         this.active = false;
     }
 
-    // UPDATED: Main constructor for server-started command auctions
     public Auction(BeeAuction plugin, String command, String commandDisplayName, double startPrice, int duration, String customName, String ownerName) {
         this.plugin = plugin;
         this.type = AuctionType.COMMAND;
@@ -57,8 +55,8 @@ public class Auction {
         this.startPrice = startPrice;
         this.duration = duration;
         this.customName = customName;
-        this.ownerName = ownerName; // e.g., "Console" for scheduled auctions
-        this.ownerUuid = null; // No specific owner UUID for console auctions
+        this.ownerName = ownerName;
+        this.ownerUuid = null;
         this.currentBid = startPrice;
         this.highestBidder = null;
         this.active = false;
@@ -68,10 +66,9 @@ public class Auction {
         active = true;
         endTime = System.currentTimeMillis() + (duration * 1000L);
         String rewardName = getRewardName();
-        Bukkit.broadcastMessage(MessageEnum.AUCTION_STARTED.get("item", rewardName, "price", plugin.getEconomyHandler().format(startPrice)));
+        Bukkit.broadcastMessage(MessageEnum.AUCTION_STARTED.get("item", rewardName, "price", plugin.getEconomyManager().getProviderName()));
     }
 
-    // UPDATED: Refactored for clarity and offline handling
     public void end() {
         active = false;
 
@@ -88,15 +85,14 @@ public class Auction {
         broadcastEndMessage();
     }
 
-    // UPDATED: Refactored for clarity and offline handling
     public void cancel() {
         active = false;
         Bukkit.broadcastMessage(MessageEnum.CANCELLED.get("reason", "The auction was cancelled by an admin."));
 
         if (highestBidder != null) {
-            plugin.getEconomyHandler().deposit(highestBidder.getUniqueId(), currentBid);
+            plugin.getEconomyManager().deposit(highestBidder, currentBid);
             if (highestBidder.isOnline()) {
-                MessageUtil.sendMessage(highestBidder, "§aYour bid of " + plugin.getEconomyHandler().format(currentBid) + " was refunded.");
+                MessageUtil.sendMessage(highestBidder, "§aYour bid of " + plugin.getEconomyManager().getProviderName() + " was refunded.");
             }
         }
 
@@ -105,34 +101,21 @@ public class Auction {
         }
     }
 
-    // UPDATED: Includes minimum bid increment logic
     public boolean placeBid(Player player, double amount) {
-        if (!active) {
-            MessageUtil.sendMessage(player, MessageEnum.NO_AUCTION.get());
-            return false;
-        }
-
-        double minIncrement = plugin.getConfigManager().getConfig().getDouble("auction.min-bid-increment", 1.0);
-        double requiredBid = (highestBidder == null) ? startPrice : currentBid + minIncrement;
-
-        if (amount < requiredBid) {
-            MessageUtil.sendMessage(player, MessageEnum.INVALID_AMOUNT.get("amount", plugin.getEconomyHandler().format(requiredBid)));
-            return false;
-        }
-
-        if (!plugin.getEconomyHandler().hasEnough(player, amount)) {
-            MessageUtil.sendMessage(player, MessageEnum.NOT_ENOUGH_MONEY.get());
+        AuctionBidEvent bidEvent = new AuctionBidEvent(this, player, amount);
+        Bukkit.getPluginManager().callEvent(bidEvent);
+        if (bidEvent.isCancelled()) {
             return false;
         }
 
         if (highestBidder != null) {
-            plugin.getEconomyHandler().deposit(highestBidder.getUniqueId(), currentBid);
+            plugin.getEconomyManager().deposit(highestBidder, currentBid);
             if (highestBidder.isOnline()) {
                 MessageUtil.sendMessage(highestBidder, MessageEnum.OUTBID.get("player", player.getName()));
             }
         }
 
-        plugin.getEconomyHandler().withdraw(player, amount);
+        plugin.getEconomyManager().withdraw(player, amount);
 
         currentBid = amount;
         highestBidder = player;
@@ -148,14 +131,13 @@ public class Auction {
         String timeExtensionText = timeExtended ? MessageEnum.TIME_EXTENSION.get("seconds", String.valueOf(timeExtension)) : "";
         Bukkit.broadcastMessage(MessageEnum.NEW_BID.get(
                 "player", player.getName(),
-                "amount", plugin.getEconomyHandler().format(amount),
+                "amount", plugin.getEconomyManager().getProviderName(),
                 "time_extension", timeExtensionText
         ));
 
         return true;
     }
 
-    // NEW: Helper method to handle giving the reward
     private void handleWinner() {
         if (highestBidder.isOnline()) {
             if (type == AuctionType.ITEM && item != null) {
@@ -171,31 +153,28 @@ public class Auction {
                 MessageUtil.sendMessage(highestBidder, MessageEnum.WIN.get("item", getRewardName()));
             }
         } else {
-            // Handle offline winner by adding item to their claim queue
             if (type == AuctionType.ITEM && item != null) {
                 plugin.getDatabaseManager().addPendingReward(highestBidder.getUniqueId(), item, "Auction win");
             }
-            // Note: Command rewards for offline players are generally not given.
         }
     }
 
-    // NEW: Helper method to handle paying the seller
     private void handlePayment() {
-        if (ownerUuid == null) return; // No seller to pay (e.g., console auction)
+        if (ownerUuid == null) return;
 
         double taxRate = plugin.getConfigManager().getConfig().getDouble("auction.sales-tax-rate", 0.0);
         double tax = currentBid * taxRate;
         double finalAmount = currentBid - tax;
 
-        plugin.getEconomyHandler().deposit(ownerUuid, finalAmount);
-
         Player owner = Bukkit.getPlayer(ownerUuid);
-        if (owner != null && owner.isOnline()) {
-            MessageUtil.sendMessage(owner, "§aYou have received " + plugin.getEconomyHandler().format(finalAmount) + " for your auction (after tax).");
+        if (owner != null) {
+            plugin.getEconomyManager().deposit(owner, finalAmount);
+            if (owner.isOnline()) {
+                MessageUtil.sendMessage(owner, "§aYou have received " + plugin.getEconomyManager().getProviderName() + " for your auction (after tax).");
+            }
         }
     }
 
-    // NEW: Helper method to return item to owner (online or offline)
     private void returnItemToOwner(String reason) {
         Player owner = Bukkit.getPlayer(ownerUuid);
         if (owner != null && owner.isOnline()) {
@@ -211,12 +190,11 @@ public class Auction {
         }
     }
 
-    // NEW: Helper method to broadcast end message and save result
     private void broadcastEndMessage() {
         String finalRewardName = getRewardName().replace("%player%", highestBidder.getName());
         Bukkit.broadcastMessage(MessageEnum.AUCTION_ENDED.get(
                 "player", highestBidder.getName(),
-                "amount", plugin.getEconomyHandler().format(currentBid),
+                "amount", plugin.getEconomyManager().getProviderName(),
                 "item", finalRewardName
         ));
         plugin.getDatabaseManager().saveAuctionResult(
@@ -228,7 +206,6 @@ public class Auction {
         );
     }
 
-    // UPDATED: getRewardName is now simpler and more reliable
     public String getRewardName() {
         if (customName != null && !customName.isEmpty()) {
             return MessageUtil.colorize(customName);
@@ -239,12 +216,11 @@ public class Auction {
             if (commandDisplayName != null && !commandDisplayName.isEmpty()) {
                 return MessageUtil.colorize(commandDisplayName);
             }
-            return command; // Fallback to the raw command
+            return command;
         }
         return "Unknown Reward";
     }
 
-    // --- Standard Getters ---
     public int getTimeRemaining() {
         if (!active) return 0;
         long remaining = endTime - System.currentTimeMillis();

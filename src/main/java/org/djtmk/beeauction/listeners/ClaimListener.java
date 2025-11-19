@@ -21,9 +21,11 @@ public class ClaimListener implements Listener {
         Player player = event.getPlayer();
         // Check for pending rewards asynchronously to avoid login lag
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (plugin.getDatabaseManager().hasPendingRewards(player.getUniqueId())) {
-                MessageUtil.sendMessage(player, MessageEnum.CLAIM_JOIN_NOTIFICATION.get());
-            }
+            plugin.getDatabaseManager().hasPendingRewards(player.getUniqueId()).thenAccept(hasRewards -> {
+                if (hasRewards) {
+                    MessageUtil.sendMessage(player, MessageEnum.CLAIM_JOIN_NOTIFICATION.get());
+                }
+            });
         }, 60L); // 3-second delay
     }
 }

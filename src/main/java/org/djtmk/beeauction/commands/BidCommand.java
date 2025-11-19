@@ -42,7 +42,6 @@ public class BidCommand implements CommandExecutor {
             return true;
         }
 
-        // Prevent owner from bidding on their own auction
         if (activeAuction.getOwnerUuid() != null && activeAuction.getOwnerUuid().equals(player.getUniqueId())) {
             MessageUtil.sendMessage(player, "§cYou cannot bid on your own auction.");
             return true;
@@ -55,14 +54,11 @@ public class BidCommand implements CommandExecutor {
                 throw new NumberFormatException();
             }
         } catch (NumberFormatException e) {
-            // The placeBid method will handle sending the correct minimum bid message.
-            // We just need to trigger it with an invalid amount.
-            plugin.getAuctionManager().placeBid(player, -1);
+            plugin.getBidManager().placeBid(activeAuction, player, -1);
             return true;
         }
 
-        // The placeBid method now contains all validation logic (min amount, enough money, etc.)
-        plugin.getAuctionManager().placeBid(player, amount);
+        plugin.getBidManager().placeBid(activeAuction, player, amount);
 
         return true;
     }

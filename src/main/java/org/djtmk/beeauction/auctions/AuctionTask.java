@@ -9,6 +9,9 @@ public class AuctionTask extends BukkitRunnable {
     private final BeeAuction plugin;
     private final Auction auction;
     private final AuctionManager auctionManager;
+    private String lastTitle;
+    private double lastProgress;
+    private BarColor lastColor;
 
     public AuctionTask(BeeAuction plugin, Auction auction, AuctionManager auctionManager) {
         this.plugin = plugin;
@@ -41,14 +44,23 @@ public class AuctionTask extends BukkitRunnable {
 
     private void updateBossBar(int timeRemaining) {
         double progress = (double) timeRemaining / auction.getDuration();
-        BossBarUtil.updateAuctionBar(getBarTitle(), progress);
+        String title = getBarTitle();
+        BarColor color;
 
         if (timeRemaining <= 10) {
-            BossBarUtil.getAuctionBar().setColor(BarColor.RED);
+            color = BarColor.RED;
         } else if (timeRemaining <= 30) {
-            BossBarUtil.getAuctionBar().setColor(BarColor.YELLOW);
+            color = BarColor.YELLOW;
         } else {
-            BossBarUtil.getAuctionBar().setColor(BarColor.GREEN);
+            color = BarColor.GREEN;
+        }
+
+        if (!title.equals(lastTitle) || progress != lastProgress || color != lastColor) {
+            BossBarUtil.updateAuctionBar(title, progress);
+            BossBarUtil.getAuctionBar().setColor(color);
+            lastTitle = title;
+            lastProgress = progress;
+            lastColor = color;
         }
     }
 
@@ -63,7 +75,7 @@ public class AuctionTask extends BukkitRunnable {
         }
 
         title.append("§eAuction: §f").append(rewardName);
-        title.append(" §7| §eBid: §a").append(plugin.getEconomyHandler().format(auction.getCurrentBid()));
+        title.append(" §7| §eBid: §a").append(plugin.getEconomyManager().getProviderName());
 
         if (auction.getHighestBidder() != null) {
             title.append(" §7| §eBy: §f").append(auction.getHighestBidder().getName());

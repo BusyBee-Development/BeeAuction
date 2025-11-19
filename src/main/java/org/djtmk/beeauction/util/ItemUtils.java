@@ -7,6 +7,7 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
 
@@ -14,48 +15,33 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Base64; // UPDATED: Use Java's standard Base64
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
 public class ItemUtils {
 
-    // ... (The methods serializeItem, deserializeItem, getItemDisplayName, and formatMaterialName are unchanged) ...
+    public static final NamespacedKey LEGACY_ITEM_KEY = new NamespacedKey("beeauction", "legacy_item");
+
     public static void serializeItem(ItemStack item, ConfigurationSection section) {
         if (item == null || section == null) {
             return;
         }
-
-        section.set("material", item.getType().name());
-        section.set("amount", item.getAmount());
-
-        if (item.hasItemMeta()) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta.hasDisplayName()) {
-                section.set("name", meta.getDisplayName());
-            }
-            if (meta.hasLore()) {
-                section.set("lore", meta.getLore());
-            }
-            if (!meta.getEnchants().isEmpty()) {
-                ConfigurationSection enchantSection = section.createSection("enchantments");
-                for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
-                    enchantSection.set(entry.getKey().getKey().getKey(), entry.getValue());
-                }
-            }
-            if (!meta.getItemFlags().isEmpty()) {
-                List<String> flags = new ArrayList<>();
-                for (ItemFlag flag : meta.getItemFlags()) {
-                    flags.add(flag.name());
-                }
-                section.set("flags", flags);
-            }
-        }
+        section.set("item_data", serializeItemToBase64(item));
     }
 
     public static ItemStack deserializeItem(ConfigurationSection section) {
         if (section == null) return null;
 
+        if (section.contains("item_data")) {
+            try {
+                return deserializeItemFromBase64(section.getString("item_data"));
+            } catch (IOException e) {
+                // Fallback to legacy deserialization
+            }
+        }
+
+        // Legacy deserialization
         String materialName = section.getString("material");
         if (materialName == null) return null;
 
@@ -68,9 +54,10 @@ public class ItemUtils {
 
         int amount = section.getInt("amount", 1);
         ItemStack item = new ItemStack(material, amount);
-
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
+
+        meta.getPersistentDataContainer().set(LEGACY_ITEM_KEY, PersistentDataType.BYTE, (byte) 1);
 
         if (section.contains("name")) {
             meta.setDisplayName(MessageUtil.colorize(section.getString("name")));
@@ -129,8 +116,6 @@ public class ItemUtils {
         return result.toString().trim();
     }
 
-
-    // UPDATED: This method now uses java.util.Base64
     public static String serializeItemToBase64(ItemStack item) throws IllegalStateException {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -143,7 +128,6 @@ public class ItemUtils {
         }
     }
 
-    // UPDATED: This method now uses java.util.Base64
     public static ItemStack deserializeItemFromBase64(String data) throws IOException {
         try {
             byte[] decodedData = Base64.getDecoder().decode(data);

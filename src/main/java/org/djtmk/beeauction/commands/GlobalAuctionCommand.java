@@ -6,18 +6,17 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.djtmk.beeauction.BeeAuction;
+import org.djtmk.beeauction.auctions.AuctionCreationManager;
 import org.djtmk.beeauction.config.MessageEnum;
-import org.djtmk.beeauction.listeners.AuctionChatListener;
 import org.djtmk.beeauction.util.MessageUtil;
 
-// This class should NOT contain any other public class definitions.
 public class GlobalAuctionCommand implements CommandExecutor {
     private final BeeAuction plugin;
-    private final AuctionChatListener chatListener;
+    private final AuctionCreationManager creationManager;
 
-    public GlobalAuctionCommand(BeeAuction plugin, AuctionChatListener chatListener) {
+    public GlobalAuctionCommand(BeeAuction plugin, AuctionCreationManager creationManager) {
         this.plugin = plugin;
-        this.chatListener = chatListener;
+        this.creationManager = creationManager;
     }
 
     @Override
@@ -61,6 +60,11 @@ public class GlobalAuctionCommand implements CommandExecutor {
         }
         Player player = (Player) sender;
 
+        if (!creationManager.canCreateAuction(player)) {
+            player.sendMessage("§cYou must wait before creating another auction.");
+            return;
+        }
+
         if (plugin.getAuctionManager().hasActiveAuction()) {
             MessageUtil.sendMessage(player, MessageEnum.AUCTION_ALREADY_ACTIVE.get());
             return;
@@ -103,8 +107,7 @@ public class GlobalAuctionCommand implements CommandExecutor {
         }
 
         player.getInventory().setItemInMainHand(null);
-        chatListener.addPendingItemAuction(player, item, duration, startPrice);
-        MessageUtil.sendMessage(player, MessageEnum.AUCTION_NAME_QUESTION.get());
+        creationManager.startItemAuctionCreation(player, item, duration, startPrice);
     }
 
     private void handleCommandAuctionStart(Player player, String[] args, int duration, double startPrice) {
@@ -119,8 +122,7 @@ public class GlobalAuctionCommand implements CommandExecutor {
         }
         String auctionCommand = commandBuilder.toString().trim();
 
-        chatListener.addPendingCommandAuction(player, auctionCommand, duration, startPrice);
-        MessageUtil.sendMessage(player, MessageEnum.COMMAND_DISPLAY_NAME_QUESTION.get());
+        creationManager.startCommandAuctionCreation(player, auctionCommand, duration, startPrice);
     }
 
     private void handleCancel(CommandSender sender) {
