@@ -1,5 +1,6 @@
 package org.djtmk.beeauction;
 
+import org.bstats.bukkit.Metrics;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.djtmk.beeauction.api.BeeAuctionAPI;
 import org.djtmk.beeauction.auctions.AuctionCreationManager;
@@ -69,7 +70,10 @@ public final class BeeAuction extends JavaPlugin {
         registerListeners();
         registerCommands();
 
-        updateChecker = new UpdateChecker(this, "beeauction"); // Replace with your Modrinth ID
+        int pluginId = 29513;
+        new Metrics(this, pluginId);
+
+        updateChecker = new UpdateChecker(this, "beeauction");
         updateChecker.check();
 
         log.info(String.format("[%s] has been enabled! Version: %s", getDescription().getName(), getDescription().getVersion()));
@@ -89,7 +93,8 @@ public final class BeeAuction extends JavaPlugin {
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(new ClaimListener(this), this);
         getServer().getPluginManager().registerEvents(new AdminJoinListener(this), this);
-        getServer().getPluginManager().registerEvents(new GUIListener(), this);
+        // GUI disabled - uncomment to re-enable
+        // getServer().getPluginManager().registerEvents(new GUIListener(), this);
         getServer().getPluginManager().registerEvents(auctionCreationListener, this);
     }
 
