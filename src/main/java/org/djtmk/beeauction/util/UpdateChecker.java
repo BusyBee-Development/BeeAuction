@@ -33,7 +33,6 @@ public class UpdateChecker {
             try {
                 URL url = new URL("https://api.modrinth.com/v2/project/" + modrinthProjectId + "/version");
 
-                // SECURITY FIX: Validate HTTPS protocol
                 if (!url.getProtocol().equals("https")) {
                     plugin.getLogger().severe("Update check must use HTTPS. Aborting.");
                     return;
@@ -43,16 +42,12 @@ public class UpdateChecker {
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("User-Agent", plugin.getName() + "/UpdateChecker");
 
-                // SECURITY FIX: Add connection timeouts to prevent hanging
-                connection.setConnectTimeout(5000); // 5 seconds to connect
-                connection.setReadTimeout(5000);    // 5 seconds to read data
-
-                // SECURITY FIX: Disable redirects to prevent redirect to non-HTTPS
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(5000);
                 connection.setInstanceFollowRedirects(false);
 
                 int responseCode = connection.getResponseCode();
 
-                // Handle redirects manually to ensure HTTPS
                 if (responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
                     responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
                     responseCode == HttpURLConnection.HTTP_SEE_OTHER) {

@@ -25,9 +25,6 @@ public class Auction {
     private final String customName;
     private final String ownerName;
     private final UUID ownerUuid;
-
-    // FIXED: Use volatile for fields accessed from multiple threads
-    // Ensures visibility of changes across threads (main thread + AuctionTask async thread)
     private volatile double currentBid;
     private volatile Player highestBidder;
     private volatile boolean active;
@@ -73,16 +70,12 @@ public class Auction {
         Bukkit.broadcastMessage(MessageEnum.AUCTION_STARTED.get("item", rewardName, "price", formattedPrice));
     }
 
-    // FIXED: Synchronized to prevent multiple concurrent end() calls
     public synchronized void end() {
-        // Check if already ended
         if (!active) {
             return;
         }
         active = false;
 
-        // FIXED: Ensure all Bukkit API calls run on main thread
-        // This method is called from AuctionTask (async), so schedule to main thread
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (highestBidder == null) {
                 Bukkit.broadcastMessage(MessageEnum.AUCTION_CANCELLED.get("reason", "No bids were placed."));
@@ -98,23 +91,18 @@ public class Auction {
         });
     }
 
-    // FIXED: Synchronized to prevent race conditions with end()
     public synchronized void cancel() {
-        // Check if already ended
         if (!active) {
             return;
         }
         active = false;
-
-        // FIXED: Ensure all Bukkit API calls run on main thread
-        // May be called from async contexts, so schedule to main thread
         Bukkit.getScheduler().runTask(plugin, () -> {
             Bukkit.broadcastMessage(MessageEnum.AUCTION_CANCELLED.get("reason", "The auction was cancelled by an admin."));
 
             if (highestBidder != null) {
                 plugin.getEconomyManager().deposit(highestBidder, currentBid);
                 if (highestBidder.isOnline()) {
-                    MessageUtil.sendMessage(highestBidder, "§aYour bid of " + plugin.getEconomyManager().getProviderName() + " was refunded.");
+                    MessageUtil.sendMessage(highestBidder, "§aYour bid of " + MessageUtil.formatPrice(currentBid) + " was refunded.");
                 }
             }
 
@@ -124,41 +112,31 @@ public class Auction {
         });
     }
 
-    // FIXED: Synchronized to prevent race conditions when multiple players bid simultaneously
-    // All validation now happens inside synchronized block to prevent TOCTOU (Time-Of-Check-Time-Of-Use) race conditions
     public synchronized boolean placeBid(Player player, double amount) {
-        // Validate auction is still active
         if (!active) {
             MessageUtil.sendMessage(player, MessageEnum.NO_AUCTION.get());
             return false;
         }
 
-        // Calculate required bid amount
         double minIncrement = plugin.getConfigManager().getConfig().getDouble("auction.min-bid-increment", 1.0);
         double requiredBid = (highestBidder == null) ? currentBid : currentBid + minIncrement;
 
-        // Validate bid amount is sufficient
         if (amount < requiredBid) {
-            MessageUtil.sendMessage(player, MessageEnum.INVALID_AMOUNT.get("amount", plugin.getEconomyManager().getProviderName()));
+            MessageUtil.sendMessage(player, MessageEnum.INVALID_AMOUNT.get("amount", MessageUtil.formatPrice(requiredBid)));
             return false;
         }
 
-        // CRITICAL: Check balance AFTER acquiring lock to prevent race condition
-        // This prevents two bids from both passing validation but only one winning
         if (!plugin.getEconomyManager().has(player, amount).join()) {
             MessageUtil.sendMessage(player, MessageEnum.NOT_ENOUGH_MONEY.get());
             return false;
         }
 
-        // Fire event (inside synchronized to maintain atomicity)
         AuctionBidEvent bidEvent = new AuctionBidEvent(this, player, amount);
         Bukkit.getPluginManager().callEvent(bidEvent);
         if (bidEvent.isCancelled()) {
             return false;
         }
 
-        // SECURITY FIX: Proper transaction ordering
-        // Withdraw from new bidder FIRST - if this fails, nothing else happens
         boolean withdrawn = plugin.getEconomyManager().withdraw(player, amount).join();
         if (!withdrawn) {
             MessageUtil.sendMessage(player, "§cFailed to withdraw funds. Please try again.");
@@ -166,13 +144,11 @@ public class Auction {
             return false;
         }
 
-        // Refund previous bidder (if exists) AFTER successful withdrawal from new bidder
         Player previousBidder = highestBidder;
         double previousBid = currentBid;
         if (previousBidder != null) {
             boolean refunded = plugin.getEconomyManager().deposit(previousBidder, previousBid).join();
             if (!refunded) {
-                // Log critical error - money was withdrawn but refund failed
                 plugin.getLogger().severe("CRITICAL: Failed to refund " + previousBid + " to " + previousBidder.getName() +
                         " after accepting bid from " + player.getName() + ". Manual intervention required.");
             } else if (previousBidder.isOnline()) {
@@ -180,11 +156,9 @@ public class Auction {
             }
         }
 
-        // Update auction state
         currentBid = amount;
         highestBidder = player;
 
-        // Handle time extension
         int timeExtension = plugin.getConfigManager().getConfig().getInt("auction.bid-time-extension", 30);
         int timeThreshold = plugin.getConfigManager().getConfig().getInt("auction.bid-time-threshold", 60);
         boolean timeExtended = false;
@@ -193,11 +167,10 @@ public class Auction {
             timeExtended = true;
         }
 
-        // Broadcast bid message
         String timeExtensionText = timeExtended ? MessageEnum.TIME_EXTENSION.get("seconds", String.valueOf(timeExtension)) : "";
         Bukkit.broadcastMessage(MessageEnum.NEW_BID.get(
                 "player", player.getName(),
-                "amount", plugin.getEconomyManager().getProviderName(),
+                "amount", MessageUtil.formatPrice(amount),
                 "time_extension", timeExtensionText
         ));
 
@@ -230,7 +203,6 @@ public class Auction {
             }
         } else {
             if (type == AuctionType.ITEM && item != null) {
-                // FIXED: Add error handling for database futures
                 plugin.getDatabaseManager().addPendingReward(highestBidder.getUniqueId(), item, "Auction win")
                         .whenComplete((result, error) -> {
                             if (error != null) {
@@ -252,7 +224,7 @@ public class Auction {
         if (owner != null) {
             plugin.getEconomyManager().deposit(owner, finalAmount);
             if (owner.isOnline()) {
-                MessageUtil.sendMessage(owner, "§aYou have received " + plugin.getEconomyManager().getProviderName() + " for your auction (after tax).");
+                MessageUtil.sendMessage(owner, "§aYou have received " + MessageUtil.formatPrice(finalAmount) + " for your auction (after tax).");
             }
         }
     }
@@ -271,7 +243,6 @@ public class Auction {
                         });
             }
         } else {
-            // FIXED: Add error handling for database futures
             plugin.getDatabaseManager().addPendingReward(ownerUuid, item.clone(), "Auction item returned")
                     .whenComplete((result, error) -> {
                         if (error != null) {
@@ -288,10 +259,9 @@ public class Auction {
         String finalRewardName = getRewardName().replace("%player%", highestBidder.getName());
         Bukkit.broadcastMessage(MessageEnum.AUCTION_ENDED.get(
                 "player", highestBidder.getName(),
-                "amount", plugin.getEconomyManager().getProviderName(),
+                "amount", MessageUtil.formatPrice(currentBid),
                 "item", finalRewardName
         ));
-        // FIXED: Add error handling for database futures
         plugin.getDatabaseManager().saveAuctionResult(
                 highestBidder.getName(),
                 highestBidder.getUniqueId(),

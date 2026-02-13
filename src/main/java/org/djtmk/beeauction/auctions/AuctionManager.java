@@ -33,12 +33,12 @@ public class AuctionManager {
     private final Map<String, Boolean> startedAuctions = new HashMap<>();
     private DayOfWeek lastCheckedDay;
     private static final String ACTIVE_AUCTION_KEY = "active_auction";
-    private final CommandValidator commandValidator; // SECURITY FIX
+    private final CommandValidator commandValidator;
 
     public AuctionManager(BeeAuction plugin) {
         this.plugin = plugin;
         this.lastCheckedDay = LocalDateTime.now().getDayOfWeek();
-        this.commandValidator = new CommandValidator(plugin); // SECURITY FIX
+        this.commandValidator = new CommandValidator(plugin);
 
         this.auctionCache = CacheBuilder.newBuilder()
                 .maximumSize(1)
@@ -192,7 +192,6 @@ public class AuctionManager {
                 String displayName = ItemUtils.getItemDisplayName(item);
                 String command = "give %player% " + item.getType().getKey().getKey() + " " + item.getAmount();
 
-                // SECURITY FIX: Validate command before starting auction
                 if (!commandValidator.validateAndLog(command, "scheduled item auction: " + auctionName)) {
                     plugin.getLogger().severe("Skipping scheduled auction '" + auctionName + "' due to dangerous command");
                     return;
@@ -208,7 +207,6 @@ public class AuctionManager {
             String command = (String) rewardMap.get("command");
             String displayName = (String) rewardMap.get("display-name");
             if (command != null && !command.isEmpty()) {
-                // SECURITY FIX: Validate command before starting auction
                 if (!commandValidator.validateAndLog(command, "scheduled command auction: " + auctionName)) {
                     plugin.getLogger().severe("Skipping scheduled auction '" + auctionName + "' due to dangerous command");
                     return;

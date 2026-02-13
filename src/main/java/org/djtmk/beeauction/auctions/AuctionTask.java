@@ -4,6 +4,7 @@ import org.bukkit.boss.BarColor;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.util.BossBarUtil;
+import org.djtmk.beeauction.util.MessageUtil;
 
 public class AuctionTask extends BukkitRunnable {
     private final BeeAuction plugin;
@@ -75,7 +76,7 @@ public class AuctionTask extends BukkitRunnable {
         }
 
         title.append("§eAuction: §f").append(rewardName);
-        title.append(" §7| §eBid: §a").append(plugin.getEconomyManager().getProviderName());
+        title.append(" §7| §eBid: §a").append(MessageUtil.formatPrice(auction.getCurrentBid()));
 
         if (auction.getHighestBidder() != null) {
             title.append(" §7| §eBy: §f").append(auction.getHighestBidder().getName());

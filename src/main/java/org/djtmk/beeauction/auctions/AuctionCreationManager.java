@@ -45,7 +45,6 @@ public class AuctionCreationManager {
             pendingAuctions.remove(player.getUniqueId());
             player.sendMessage("Auction creation cancelled.");
             if (pending.isItemAuction()) {
-                // FIXED: Add error handling for database future
                 plugin.getDatabaseManager().addPendingReward(player.getUniqueId(), pending.getItem(), "Auction creation cancelled")
                         .whenComplete((result, error) -> {
                             if (error != null) {
@@ -57,7 +56,6 @@ public class AuctionCreationManager {
             return;
         }
 
-        // SECURITY FIX: Sanitize all user input to prevent exploits
         String sanitizedInput = InputSanitizer.sanitizeChatInput(message);
 
         if (sanitizedInput.isEmpty()) {
