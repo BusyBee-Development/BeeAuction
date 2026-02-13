@@ -10,7 +10,7 @@ commands:
   auction:
     description: Main command for GlobalAuction plugin
     usage: /auction <start|cancel|reload>
-    aliases: [ba, ah]
+    aliases: [ba]
     permission: auction.admin
   bid:
     description: Bid on the current auction

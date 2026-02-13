@@ -114,6 +114,10 @@ public class ConfigManager {
             return "§cMessage not found: " + key;
         }
 
+        // Replace {prefix} placeholder with actual prefix
+        String prefix = instance.messagesConfig.getString("prefix", "");
+        message = message.replace("{prefix}", prefix);
+
         return MessageUtil.colorize(message);
     }
 

@@ -69,7 +69,8 @@ public class Auction {
         active = true;
         endTime = System.currentTimeMillis() + (duration * 1000L);
         String rewardName = getRewardName();
-        Bukkit.broadcastMessage(MessageEnum.AUCTION_STARTED.get("item", rewardName, "price", plugin.getEconomyManager().getProviderName()));
+        String formattedPrice = MessageUtil.formatPrice(startPrice);
+        Bukkit.broadcastMessage(MessageEnum.AUCTION_STARTED.get("item", rewardName, "price", formattedPrice));
     }
 
     // FIXED: Synchronized to prevent multiple concurrent end() calls
@@ -84,7 +85,7 @@ public class Auction {
         // This method is called from AuctionTask (async), so schedule to main thread
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (highestBidder == null) {
-                Bukkit.broadcastMessage(MessageEnum.CANCELLED.get("reason", "No bids were placed."));
+                Bukkit.broadcastMessage(MessageEnum.AUCTION_CANCELLED.get("reason", "No bids were placed."));
                 if (type == AuctionType.ITEM && item != null && ownerUuid != null) {
                     returnItemToOwner("Your auctioned item was returned (no bids).");
                 }
@@ -108,7 +109,7 @@ public class Auction {
         // FIXED: Ensure all Bukkit API calls run on main thread
         // May be called from async contexts, so schedule to main thread
         Bukkit.getScheduler().runTask(plugin, () -> {
-            Bukkit.broadcastMessage(MessageEnum.CANCELLED.get("reason", "The auction was cancelled by an admin."));
+            Bukkit.broadcastMessage(MessageEnum.AUCTION_CANCELLED.get("reason", "The auction was cancelled by an admin."));
 
             if (highestBidder != null) {
                 plugin.getEconomyManager().deposit(highestBidder, currentBid);
