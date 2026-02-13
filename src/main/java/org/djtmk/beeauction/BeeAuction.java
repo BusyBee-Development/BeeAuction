@@ -71,7 +71,12 @@ public final class BeeAuction extends JavaPlugin {
         registerCommands();
 
         int pluginId = 29513;
-        new Metrics(this, pluginId);
+        try {
+            new Metrics(this, pluginId);
+            log.info(String.format("[%s] bStats metrics enabled.", getDescription().getName()));
+        } catch (Exception e) {
+            log.warning(String.format("[%s] Failed to initialize bStats: %s", getDescription().getName(), e.getMessage()));
+        }
 
         updateChecker = new UpdateChecker(this, "beeauction");
         updateChecker.check();
