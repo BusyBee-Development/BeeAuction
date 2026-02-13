@@ -14,24 +14,9 @@ public class BidManager {
     }
 
     public boolean placeBid(Auction auction, Player player, double amount) {
-        if (!auction.isActive()) {
-            MessageUtil.sendMessage(player, MessageEnum.NO_AUCTION.get());
-            return false;
-        }
-
-        double minIncrement = plugin.getConfigManager().getConfig().getDouble("auction.min-bid-increment", 1.0);
-        double requiredBid = (auction.getHighestBidder() == null) ? auction.getCurrentBid() : auction.getCurrentBid() + minIncrement;
-
-        if (amount < requiredBid) {
-            MessageUtil.sendMessage(player, MessageEnum.INVALID_AMOUNT.get("amount", plugin.getEconomyManager().getProviderName()));
-            return false;
-        }
-
-        if (!plugin.getEconomyManager().has(player, amount).join()) {
-            MessageUtil.sendMessage(player, MessageEnum.NOT_ENOUGH_MONEY.get());
-            return false;
-        }
-
+        // SECURITY FIX: All validation moved to Auction.placeBid() inside synchronized block
+        // This prevents TOCTOU (Time-Of-Check-Time-Of-Use) race conditions
+        // The validation here was happening OUTSIDE the lock, allowing race conditions
         return auction.placeBid(player, amount);
     }
 }

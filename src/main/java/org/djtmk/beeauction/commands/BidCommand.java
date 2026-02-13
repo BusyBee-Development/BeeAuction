@@ -7,10 +7,22 @@ import org.bukkit.entity.Player;
 import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.auctions.Auction;
 import org.djtmk.beeauction.config.MessageEnum;
+import org.djtmk.beeauction.util.InputSanitizer;
 import org.djtmk.beeauction.util.MessageUtil;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BidCommand implements CommandExecutor {
     private final BeeAuction plugin;
+
+    // SECURITY FIX: Rate limiting to prevent bid spam/DoS
+    private final Map<UUID, Long> lastBidTime = new ConcurrentHashMap<>();
+    private static final long BID_COOLDOWN_MS = 500; // 500ms between bids
+
+    // SECURITY FIX: Maximum bid amount to prevent overflow/precision issues
+    private static final double DEFAULT_MAX_BID = 1_000_000_000.0; // 1 billion
 
     public BidCommand(BeeAuction plugin) {
         this.plugin = plugin;
@@ -47,6 +59,16 @@ public class BidCommand implements CommandExecutor {
             return true;
         }
 
+        // SECURITY FIX: Rate limiting check
+        UUID playerUuid = player.getUniqueId();
+        long currentTime = System.currentTimeMillis();
+        Long lastBid = lastBidTime.get(playerUuid);
+
+        if (lastBid != null && (currentTime - lastBid) < BID_COOLDOWN_MS) {
+            MessageUtil.sendMessage(player, "§cPlease wait before bidding again.");
+            return true;
+        }
+
         double amount;
         try {
             amount = Double.parseDouble(args[0]);
@@ -57,6 +79,16 @@ public class BidCommand implements CommandExecutor {
             plugin.getBidManager().placeBid(activeAuction, player, -1);
             return true;
         }
+
+        // SECURITY FIX: Maximum bid validation
+        double maxBid = plugin.getConfigManager().getConfig().getDouble("auction.max-bid-amount", DEFAULT_MAX_BID);
+        if (!InputSanitizer.isValidAmount(amount, 0.01, maxBid)) {
+            MessageUtil.sendMessage(player, "§cInvalid bid amount. Maximum bid is " + maxBid);
+            return true;
+        }
+
+        // Update rate limit timestamp BEFORE placing bid (prevents spam even if bid fails)
+        lastBidTime.put(playerUuid, currentTime);
 
         plugin.getBidManager().placeBid(activeAuction, player, amount);
 

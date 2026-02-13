@@ -4,6 +4,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.djtmk.beeauction.BeeAuction;
+import org.djtmk.beeauction.util.InputSanitizer;
 import org.djtmk.beeauction.util.ItemUtils;
 
 import java.util.Map;
@@ -44,20 +45,36 @@ public class AuctionCreationManager {
             pendingAuctions.remove(player.getUniqueId());
             player.sendMessage("Auction creation cancelled.");
             if (pending.isItemAuction()) {
-                plugin.getDatabaseManager().addPendingReward(player.getUniqueId(), pending.getItem(), "Auction creation cancelled");
+                // FIXED: Add error handling for database future
+                plugin.getDatabaseManager().addPendingReward(player.getUniqueId(), pending.getItem(), "Auction creation cancelled")
+                        .whenComplete((result, error) -> {
+                            if (error != null) {
+                                plugin.getLogger().severe("Failed to return item to " + player.getName() + " after cancel: " + error.getMessage());
+                            }
+                        });
                 player.sendMessage("Your item has been returned to your /claim queue.");
             }
             return;
         }
 
+        // SECURITY FIX: Sanitize all user input to prevent exploits
+        String sanitizedInput = InputSanitizer.sanitizeChatInput(message);
+
+        if (sanitizedInput.isEmpty()) {
+            player.sendMessage("§cInvalid input. Please enter a valid name (or type 'cancel').");
+            return;
+        }
+
         switch (pending.getStage()) {
             case AWAITING_DISPLAY_NAME:
-                pending.setCommandDisplayName(message);
+                String sanitizedDisplayName = InputSanitizer.sanitizeCommandDisplayName(sanitizedInput);
+                pending.setCommandDisplayName(sanitizedDisplayName);
                 pending.setStage(PendingStage.AWAITING_AUCTION_NAME);
                 player.sendMessage("Please enter a name for this auction in chat (or type 'cancel').");
                 break;
             case AWAITING_AUCTION_NAME:
-                pending.setAuctionName(message);
+                String sanitizedAuctionName = InputSanitizer.sanitizeAuctionName(sanitizedInput);
+                pending.setAuctionName(sanitizedAuctionName);
                 createAuction(player, pending);
                 break;
         }

@@ -37,7 +37,13 @@ public class AuctionChatListener implements Listener {
                         MessageUtil.sendMessage(player, "§cYour auction creation has timed out and was cancelled.");
                     }
                     if (pending.isItemAuction() && pending.getItem() != null) {
-                        plugin.getDatabaseManager().addPendingReward(uuid, pending.getItem(), "Auction creation timed out");
+                        // FIXED: Add error handling for database future
+                        plugin.getDatabaseManager().addPendingReward(uuid, pending.getItem(), "Auction creation timed out")
+                                .whenComplete((result, error) -> {
+                                    if (error != null) {
+                                        plugin.getLogger().severe("Failed to return item after timeout for UUID " + uuid + ": " + error.getMessage());
+                                    }
+                                });
                     }
                 }
             });
@@ -58,7 +64,13 @@ public class AuctionChatListener implements Listener {
                 pendingAuctions.remove(playerUUID);
                 MessageUtil.sendMessage(player, "§cAuction creation cancelled.");
                 if (pending.isItemAuction()) {
-                    plugin.getDatabaseManager().addPendingReward(playerUUID, pending.getItem(), "Auction creation cancelled");
+                    // FIXED: Add error handling for database future
+                    plugin.getDatabaseManager().addPendingReward(playerUUID, pending.getItem(), "Auction creation cancelled")
+                            .whenComplete((result, error) -> {
+                                if (error != null) {
+                                    plugin.getLogger().severe("Failed to return item to " + player.getName() + " after cancel: " + error.getMessage());
+                                }
+                            });
                     MessageUtil.sendMessage(player, "§aYour item has been returned to your /claim queue.");
                 }
                 return;
@@ -72,7 +84,13 @@ public class AuctionChatListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         PendingAuction pending = pendingAuctions.remove(event.getPlayer().getUniqueId());
         if (pending != null && pending.isItemAuction()) {
-            plugin.getDatabaseManager().addPendingReward(event.getPlayer().getUniqueId(), pending.getItem(), "Auction creation cancelled (disconnect)");
+            // FIXED: Add error handling for database future
+            plugin.getDatabaseManager().addPendingReward(event.getPlayer().getUniqueId(), pending.getItem(), "Auction creation cancelled (disconnect)")
+                    .whenComplete((result, error) -> {
+                        if (error != null) {
+                            plugin.getLogger().severe("Failed to return item after disconnect for " + event.getPlayer().getName() + ": " + error.getMessage());
+                        }
+                    });
         }
     }
 

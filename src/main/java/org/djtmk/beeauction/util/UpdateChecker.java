@@ -32,12 +32,41 @@ public class UpdateChecker {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 URL url = new URL("https://api.modrinth.com/v2/project/" + modrinthProjectId + "/version");
+
+                // SECURITY FIX: Validate HTTPS protocol
+                if (!url.getProtocol().equals("https")) {
+                    plugin.getLogger().severe("Update check must use HTTPS. Aborting.");
+                    return;
+                }
+
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("User-Agent", plugin.getName() + "/UpdateChecker");
 
-                if (connection.getResponseCode() != 200) {
-                    plugin.getLogger().warning("Could not check for updates. Modrinth API returned status: " + connection.getResponseCode());
+                // SECURITY FIX: Add connection timeouts to prevent hanging
+                connection.setConnectTimeout(5000); // 5 seconds to connect
+                connection.setReadTimeout(5000);    // 5 seconds to read data
+
+                // SECURITY FIX: Disable redirects to prevent redirect to non-HTTPS
+                connection.setInstanceFollowRedirects(false);
+
+                int responseCode = connection.getResponseCode();
+
+                // Handle redirects manually to ensure HTTPS
+                if (responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
+                    responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
+                    responseCode == HttpURLConnection.HTTP_SEE_OTHER) {
+                    String redirectUrl = connection.getHeaderField("Location");
+                    if (redirectUrl != null && !redirectUrl.startsWith("https://")) {
+                        plugin.getLogger().warning("Update check redirect to non-HTTPS URL blocked: " + redirectUrl);
+                        return;
+                    }
+                    plugin.getLogger().info("Update check redirected, please update the Modrinth project ID.");
+                    return;
+                }
+
+                if (responseCode != 200) {
+                    plugin.getLogger().warning("Could not check for updates. Modrinth API returned status: " + responseCode);
                     return;
                 }
 

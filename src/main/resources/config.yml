@@ -35,6 +35,8 @@ auction:
   # NEW: The tax rate (e.g., 0.05 = 5%) to take from the final sale price of player-started auctions.
   # The seller receives the final price minus this tax. Set to 0 to disable.
   sales-tax-rate: 0.05
+  # SECURITY: Maximum bid amount to prevent overflow and abuse (default: 1 billion)
+  max-bid-amount: 1000000000
 
 #---------------------------------
 # Commands Configuration
@@ -42,7 +44,7 @@ auction:
 commands:
   admin:
     name: "auction"
-    aliases: ["ba", "ah"]
+    aliases: ["ba"]
     subcommands:
       start: "start"
       cancel: "cancel"
@@ -60,10 +62,38 @@ commands:
 schedule:
   # Enable or disable scheduled auctions that run automatically.
   enabled: true
+  # SECURITY: Command whitelist/blacklist for scheduled auctions
+  command-validation:
+    # Enable command validation (highly recommended)
+    enabled: true
+    # Whitelist mode: if true, only commands starting with these are allowed
+    # If false, all commands except blacklisted ones are allowed
+    whitelist-mode: false
+    # Allowed command prefixes (only used if whitelist-mode is true)
+    whitelist:
+      - "give"
+      - "effect"
+      - "eco give"
+      - "coins give"
+    # Blocked command prefixes (always blocked, regardless of mode)
+    blacklist:
+      - "op"
+      - "deop"
+      - "stop"
+      - "reload"
+      - "restart"
+      - "ban"
+      - "kick"
+      - "pardon"
+      - "minecraft:op"
+      - "minecraft:deop"
+      - "bukkit:"
+      - "execute"
   auctions:
     # Example Item Auction
     - day: MONDAY
       time: "20:00" # 24-hour format (HH:mm)
+      duration: 300 # Duration in seconds (default: 300 = 5 minutes)
       name: "&bSpecial Diamonds Auction"
       reward:
         type: ITEM
@@ -78,6 +108,7 @@ schedule:
     # Example Command Auction
     - day: THURSDAY
       time: "20:30"
+      duration: 300 # Duration in seconds (default: 300 = 5 minutes)
       name: "&cStrength Effect Auction"
       reward:
         type: COMMAND
@@ -85,5 +116,3 @@ schedule:
         command: "effect give %player% strength 300 1"
         # NEW: Use 'display-name' to show a clean name for the command reward.
         display-name: "&cStrength II Potion (5:00)"
-
-    # Add more auctions as needed...

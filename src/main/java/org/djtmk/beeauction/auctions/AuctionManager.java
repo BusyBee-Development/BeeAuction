@@ -11,6 +11,7 @@ import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.config.AuctionEnum.AuctionType;
 import org.djtmk.beeauction.config.MessageEnum;
 import org.djtmk.beeauction.events.AuctionStartEvent;
+import org.djtmk.beeauction.util.CommandValidator;
 import org.djtmk.beeauction.util.ItemUtils;
 import org.djtmk.beeauction.util.MessageUtil;
 
@@ -32,10 +33,12 @@ public class AuctionManager {
     private final Map<String, Boolean> startedAuctions = new HashMap<>();
     private DayOfWeek lastCheckedDay;
     private static final String ACTIVE_AUCTION_KEY = "active_auction";
+    private final CommandValidator commandValidator; // SECURITY FIX
 
     public AuctionManager(BeeAuction plugin) {
         this.plugin = plugin;
         this.lastCheckedDay = LocalDateTime.now().getDayOfWeek();
+        this.commandValidator = new CommandValidator(plugin); // SECURITY FIX
 
         this.auctionCache = CacheBuilder.newBuilder()
                 .maximumSize(1)
@@ -180,6 +183,7 @@ public class AuctionManager {
         AuctionType type = AuctionType.valueOf(((String) rewardMap.get("type")).toUpperCase());
         double startPrice = ((Number) rewardMap.get("start_price")).doubleValue();
         String auctionName = (String) auctionMap.get("name");
+        int duration = auctionMap.containsKey("duration") ? ((Number) auctionMap.get("duration")).intValue() : 300;
 
         if (type == AuctionType.ITEM) {
             ConfigurationSection itemSection = plugin.getConfigManager().getConfig().createSection("temp_item", (Map<?, ?>) rewardMap.get("item"));
@@ -187,13 +191,34 @@ public class AuctionManager {
             if (item != null) {
                 String displayName = ItemUtils.getItemDisplayName(item);
                 String command = "give %player% " + item.getType().getKey().getKey() + " " + item.getAmount();
-                startCommandAuction(command, displayName, 300, startPrice, auctionName, "Server");
+
+                // SECURITY FIX: Validate command before starting auction
+                if (!commandValidator.validateAndLog(command, "scheduled item auction: " + auctionName)) {
+                    plugin.getLogger().severe("Skipping scheduled auction '" + auctionName + "' due to dangerous command");
+                    return;
+                }
+                if (!commandValidator.isSafeCommand(command)) {
+                    plugin.getLogger().severe("Skipping scheduled auction '" + auctionName + "' due to unsafe command patterns");
+                    return;
+                }
+
+                startCommandAuction(command, displayName, duration, startPrice, auctionName, "Server");
             }
         } else if (type == AuctionType.COMMAND) {
             String command = (String) rewardMap.get("command");
             String displayName = (String) rewardMap.get("display-name");
             if (command != null && !command.isEmpty()) {
-                startCommandAuction(command, displayName, 300, startPrice, auctionName, "Server");
+                // SECURITY FIX: Validate command before starting auction
+                if (!commandValidator.validateAndLog(command, "scheduled command auction: " + auctionName)) {
+                    plugin.getLogger().severe("Skipping scheduled auction '" + auctionName + "' due to dangerous command");
+                    return;
+                }
+                if (!commandValidator.isSafeCommand(command)) {
+                    plugin.getLogger().severe("Skipping scheduled auction '" + auctionName + "' due to unsafe command patterns");
+                    return;
+                }
+
+                startCommandAuction(command, displayName, duration, startPrice, auctionName, "Server");
             }
         }
     }

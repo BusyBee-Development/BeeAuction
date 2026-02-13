@@ -7,6 +7,7 @@ import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.config.AuctionEnum.AuctionType;
 import org.djtmk.beeauction.config.MessageEnum;
 import org.djtmk.beeauction.events.AuctionBidEvent;
+import org.djtmk.beeauction.util.InputSanitizer;
 import org.djtmk.beeauction.util.ItemUtils;
 import org.djtmk.beeauction.util.MessageUtil;
 
@@ -123,25 +124,66 @@ public class Auction {
     }
 
     // FIXED: Synchronized to prevent race conditions when multiple players bid simultaneously
+    // All validation now happens inside synchronized block to prevent TOCTOU (Time-Of-Check-Time-Of-Use) race conditions
     public synchronized boolean placeBid(Player player, double amount) {
+        // Validate auction is still active
+        if (!active) {
+            MessageUtil.sendMessage(player, MessageEnum.NO_AUCTION.get());
+            return false;
+        }
+
+        // Calculate required bid amount
+        double minIncrement = plugin.getConfigManager().getConfig().getDouble("auction.min-bid-increment", 1.0);
+        double requiredBid = (highestBidder == null) ? currentBid : currentBid + minIncrement;
+
+        // Validate bid amount is sufficient
+        if (amount < requiredBid) {
+            MessageUtil.sendMessage(player, MessageEnum.INVALID_AMOUNT.get("amount", plugin.getEconomyManager().getProviderName()));
+            return false;
+        }
+
+        // CRITICAL: Check balance AFTER acquiring lock to prevent race condition
+        // This prevents two bids from both passing validation but only one winning
+        if (!plugin.getEconomyManager().has(player, amount).join()) {
+            MessageUtil.sendMessage(player, MessageEnum.NOT_ENOUGH_MONEY.get());
+            return false;
+        }
+
+        // Fire event (inside synchronized to maintain atomicity)
         AuctionBidEvent bidEvent = new AuctionBidEvent(this, player, amount);
         Bukkit.getPluginManager().callEvent(bidEvent);
         if (bidEvent.isCancelled()) {
             return false;
         }
 
-        if (highestBidder != null) {
-            plugin.getEconomyManager().deposit(highestBidder, currentBid);
-            if (highestBidder.isOnline()) {
-                MessageUtil.sendMessage(highestBidder, MessageEnum.OUTBID.get("player", player.getName()));
+        // SECURITY FIX: Proper transaction ordering
+        // Withdraw from new bidder FIRST - if this fails, nothing else happens
+        boolean withdrawn = plugin.getEconomyManager().withdraw(player, amount).join();
+        if (!withdrawn) {
+            MessageUtil.sendMessage(player, "§cFailed to withdraw funds. Please try again.");
+            plugin.getLogger().warning("Failed to withdraw " + amount + " from player " + player.getName() + " for auction bid");
+            return false;
+        }
+
+        // Refund previous bidder (if exists) AFTER successful withdrawal from new bidder
+        Player previousBidder = highestBidder;
+        double previousBid = currentBid;
+        if (previousBidder != null) {
+            boolean refunded = plugin.getEconomyManager().deposit(previousBidder, previousBid).join();
+            if (!refunded) {
+                // Log critical error - money was withdrawn but refund failed
+                plugin.getLogger().severe("CRITICAL: Failed to refund " + previousBid + " to " + previousBidder.getName() +
+                        " after accepting bid from " + player.getName() + ". Manual intervention required.");
+            } else if (previousBidder.isOnline()) {
+                MessageUtil.sendMessage(previousBidder, MessageEnum.OUTBID.get("player", player.getName()));
             }
         }
 
-        plugin.getEconomyManager().withdraw(player, amount);
-
+        // Update auction state
         currentBid = amount;
         highestBidder = player;
 
+        // Handle time extension
         int timeExtension = plugin.getConfigManager().getConfig().getInt("auction.bid-time-extension", 30);
         int timeThreshold = plugin.getConfigManager().getConfig().getInt("auction.bid-time-threshold", 60);
         boolean timeExtended = false;
@@ -150,6 +192,7 @@ public class Auction {
             timeExtended = true;
         }
 
+        // Broadcast bid message
         String timeExtensionText = timeExtended ? MessageEnum.TIME_EXTENSION.get("seconds", String.valueOf(timeExtension)) : "";
         Bukkit.broadcastMessage(MessageEnum.NEW_BID.get(
                 "player", player.getName(),
@@ -176,7 +219,11 @@ public class Auction {
                 }
                 MessageUtil.sendMessage(highestBidder, MessageEnum.WIN.get("item", getRewardName()));
             } else if (type == AuctionType.COMMAND && command != null) {
-                String formattedCommand = command.replace("%player%", highestBidder.getName());
+                // SECURITY FIX: Sanitize player name to prevent command injection
+                String sanitizedPlayerName = InputSanitizer.sanitizePlayerName(highestBidder.getName());
+                String formattedCommand = command.replace("%player%", sanitizedPlayerName);
+
+                plugin.getLogger().info("Executing auction command: " + InputSanitizer.sanitizeForLogging(formattedCommand) + " for player: " + highestBidder.getName());
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formattedCommand);
                 MessageUtil.sendMessage(highestBidder, MessageEnum.WIN.get("item", getRewardName()));
             }
