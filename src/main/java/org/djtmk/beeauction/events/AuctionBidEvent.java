@@ -23,30 +23,24 @@ public class AuctionBidEvent extends Event implements Cancellable {
     public Auction getAuction() {
         return auction;
     }
-
     public Player getPlayer() {
         return player;
     }
-
     public double getBidAmount() {
         return bidAmount;
     }
-
     @Override
     public boolean isCancelled() {
         return isCancelled;
     }
-
     @Override
     public void setCancelled(boolean cancel) {
         this.isCancelled = cancel;
     }
-
     @Override
     public HandlerList getHandlers() {
         return handlers;
     }
-
     public static HandlerList getHandlerList() {
         return handlers;
     }

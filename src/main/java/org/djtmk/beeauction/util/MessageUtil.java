@@ -14,10 +14,8 @@ public class MessageUtil {
             return "";
         }
 
-        // First translate standard color codes
         String colored = ChatColor.translateAlternateColorCodes('&', message);
 
-        // Then replace hex colors
         Matcher matcher = HEX_PATTERN.matcher(colored);
         StringBuffer buffer = new StringBuffer();
 

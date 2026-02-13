@@ -7,7 +7,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.Arrays;
 
 public class AuctionGUI {
 
@@ -21,9 +20,6 @@ public class AuctionGUI {
     public void open() {
         Inventory inv = Bukkit.createInventory(null, 54, "BeeAuction - Page " + (page + 1));
 
-        // Add items to the inventory...
-
-        // Add navigation buttons
         ItemStack prevPage = new ItemStack(Material.ARROW);
         ItemMeta prevMeta = prevPage.getItemMeta();
         prevMeta.setDisplayName("Previous Page");

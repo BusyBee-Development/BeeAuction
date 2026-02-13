@@ -3,14 +3,12 @@ package org.djtmk.beeauction.data;
 import org.djtmk.beeauction.BeeAuction;
 import org.bukkit.inventory.ItemStack;
 
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 
-// UPDATED: Wraps the new database methods.
 public class DatabaseManager {
     private final BeeAuction plugin;
     private DatabaseHandler databaseHandler;
@@ -37,7 +35,7 @@ public class DatabaseManager {
         }
     }
 
-    public ResultSet getAuctionHistory() {
+    public List<AuctionHistoryEntry> getAuctionHistory() {
         if (databaseHandler != null) {
             try {
                 return databaseHandler.getAuctionHistory();
@@ -45,10 +43,9 @@ public class DatabaseManager {
                 plugin.getLogger().log(Level.SEVERE, "Failed to get auction history", e);
             }
         }
-        return null;
+        return Collections.emptyList();
     }
 
-    // NEW wrapper methods for pending rewards
     public void addPendingReward(UUID playerUuid, ItemStack item, String reason) {
         if (databaseHandler != null) {
             databaseHandler.addPendingReward(playerUuid, item, reason);

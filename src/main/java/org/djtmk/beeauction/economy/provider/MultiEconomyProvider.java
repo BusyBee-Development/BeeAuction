@@ -23,10 +23,6 @@ public class MultiEconomyProvider implements EconomyProvider {
                 return;
             }
         }
-        // Add other economy providers here in the future, e.g.:
-        // if (Bukkit.getPluginManager().getPlugin("PlayerPoints") != null) {
-        //     // ... initialize PlayerPoints provider
-        // }
         log.warning("[BeeAuction] No supported economy provider found.");
     }
 

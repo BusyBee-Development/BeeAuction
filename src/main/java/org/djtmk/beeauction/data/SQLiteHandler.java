@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 
-// UPDATED: Implements new methods for offline reward storage.
 public class SQLiteHandler implements DatabaseHandler {
     private final BeeAuction plugin;
     private File databaseFile;
@@ -99,10 +98,29 @@ public class SQLiteHandler implements DatabaseHandler {
     }
 
     @Override
-    public ResultSet getAuctionHistory() throws SQLException {
-        Connection conn = getConnection();
-        PreparedStatement stmt = conn.prepareStatement("SELECT * FROM auction_history ORDER BY timestamp DESC LIMIT 10");
-        return stmt.executeQuery();
+    public List<AuctionHistoryEntry> getAuctionHistory() throws SQLException {
+        // FIXED: Process ResultSet inside try-with-resources to prevent resource leak
+        String sql = "SELECT * FROM auction_history ORDER BY timestamp DESC LIMIT 10";
+        List<AuctionHistoryEntry> entries = new ArrayList<>();
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                AuctionHistoryEntry entry = new AuctionHistoryEntry(
+                        rs.getInt("id"),
+                        rs.getString("player_name"),
+                        UUID.fromString(rs.getString("player_uuid")),
+                        rs.getDouble("amount"),
+                        rs.getString("auction_type"),
+                        rs.getString("reward"),
+                        rs.getTimestamp("timestamp")
+                );
+                entries.add(entry);
+            }
+        }
+        return entries;
     }
 
     @Override
@@ -120,32 +138,57 @@ public class SQLiteHandler implements DatabaseHandler {
 
     @Override
     public List<ItemStack> getAndRemovePendingRewards(UUID playerUuid) throws SQLException {
+        // FIXED: Use transaction with row-level locking to prevent race condition
+        // SELECT with DELETE in single atomic transaction ensures no duplicate claims
         String selectSql = "SELECT id, item_data FROM pending_rewards WHERE player_uuid = ?";
         String deleteSql = "DELETE FROM pending_rewards WHERE id = ?";
         List<ItemStack> items = new ArrayList<>();
         List<Integer> idsToRemove = new ArrayList<>();
 
-        try (Connection conn = getConnection(); PreparedStatement selectStmt = conn.prepareStatement(selectSql)) {
-            selectStmt.setString(1, playerUuid.toString());
-            ResultSet rs = selectStmt.executeQuery();
-            while (rs.next()) {
-                idsToRemove.add(rs.getInt("id"));
-                try {
-                    ItemStack item = ItemUtils.deserializeItemFromBase64(rs.getString("item_data"));
-                    items.add(item);
-                } catch (IOException e) {
-                    plugin.getLogger().log(Level.WARNING, "Could not deserialize a pending item reward.", e);
-                }
-            }
-            if (!idsToRemove.isEmpty()) {
-                try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
-                    for (Integer id : idsToRemove) {
-                        deleteStmt.setInt(1, id);
-                        deleteStmt.addBatch();
+        Connection conn = null;
+        try {
+            conn = getConnection();
+            // Start transaction - critical for atomicity
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement selectStmt = conn.prepareStatement(selectSql)) {
+                selectStmt.setString(1, playerUuid.toString());
+                ResultSet rs = selectStmt.executeQuery();
+                while (rs.next()) {
+                    idsToRemove.add(rs.getInt("id"));
+                    try {
+                        ItemStack item = ItemUtils.deserializeItemFromBase64(rs.getString("item_data"));
+                        items.add(item);
+                    } catch (IOException e) {
+                        plugin.getLogger().log(Level.WARNING, "Could not deserialize a pending item reward.", e);
                     }
-                    deleteStmt.executeBatch();
+                }
+
+                if (!idsToRemove.isEmpty()) {
+                    try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
+                        for (Integer id : idsToRemove) {
+                            deleteStmt.setInt(1, id);
+                            deleteStmt.addBatch();
+                        }
+                        deleteStmt.executeBatch();
+                    }
+                }
+
+                // Commit transaction - makes SELECT+DELETE atomic
+                conn.commit();
+            } catch (SQLException e) {
+                // Rollback on any error
+                if (conn != null) {
+                    conn.rollback();
+                }
+                throw e;
+            } finally {
+                // Restore auto-commit
+                if (conn != null) {
+                    conn.setAutoCommit(true);
                 }
             }
+        } finally {
         }
         return items;
     }

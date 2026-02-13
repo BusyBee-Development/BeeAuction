@@ -32,7 +32,6 @@ public class ConfigManager {
     }
 
     public boolean loadConfigs() {
-        // Create config directory if it doesn't exist
         if (!plugin.getDataFolder().exists()) {
             plugin.getDataFolder().mkdir();
         }
@@ -46,38 +45,28 @@ public class ConfigManager {
         plugin.saveDefaultConfig();
         config.setDefaults(plugin.getConfig());
 
-
-        // Migrate and validate
         migrator.migrate();
         if (!validator.validate()) {
             return false;
         }
 
-        // Load messages config
         messagesFile = new File(plugin.getDataFolder(), "messages.yml");
         if (!messagesFile.exists()) {
             plugin.saveResource("messages.yml", false);
         }
         messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
 
-        // Compare with defaults
         matchConfigWithDefaults();
         return true;
     }
 
     public void reloadConfigs() {
-        // Reload main config
         config = YamlConfiguration.loadConfiguration(configFile);
-
-        // Reload messages config
         messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
-
-        // Compare with defaults
         matchConfigWithDefaults();
     }
 
     private void matchConfigWithDefaults() {
-        // Match main config with defaults
         InputStream defaultConfigStream = plugin.getResource("config.yml");
         if (defaultConfigStream != null) {
             YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(
@@ -96,7 +85,6 @@ public class ConfigManager {
             }
         }
 
-        // Match messages config with defaults
         InputStream defaultMessagesStream = plugin.getResource("messages.yml");
         if (defaultMessagesStream != null) {
             YamlConfiguration defaultMessages = YamlConfiguration.loadConfiguration(
@@ -148,47 +136,34 @@ public class ConfigManager {
     public boolean isScheduleEnabled() {
         return config.getBoolean("schedule.enabled", false);
     }
-
-    // Command configuration methods
-
-    // Admin command methods
     public String getAdminCommandName() {
         return config.getString("commands.admin.name", "globalauction");
     }
-
     public List<String> getAdminCommandAliases() {
         return config.getStringList("commands.admin.aliases");
     }
-
     public String getAdminSubcommandStart() {
         return config.getString("commands.admin.subcommands.start", "start");
     }
-
     public String getAdminSubcommandCancel() {
         return config.getString("commands.admin.subcommands.cancel", "cancel");
     }
-
     public String getAdminSubcommandReload() {
         return config.getString("commands.admin.subcommands.reload", "reload");
     }
-
     public String getAdminAuctionTypeItem() {
         return config.getString("commands.admin.auction-types.item", "item");
     }
-
     public String getAdminAuctionTypeCommand() {
         return config.getString("commands.admin.auction-types.command", "command");
     }
 
-    // Player command methods
     public String getPlayerBidCommand() {
         return config.getString("commands.player.bid", "podbij");
     }
-
     public List<String> getPlayerBidCommandAliases() {
         return config.getStringList("commands.player.bid-aliases");
     }
-
     public FileConfiguration getConfig() {
         return config;
     }

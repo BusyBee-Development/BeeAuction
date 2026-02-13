@@ -89,7 +89,6 @@ public class AuctionCreationManager {
     public boolean hasPendingAuction(Player player) {
         return pendingAuctions.containsKey(player.getUniqueId());
     }
-
     public void removePendingAuction(Player player) {
         pendingAuctions.remove(player.getUniqueId());
     }

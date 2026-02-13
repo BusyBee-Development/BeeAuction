@@ -12,7 +12,6 @@ public class AuctionStartEvent extends Event {
     public AuctionStartEvent(Auction auction) {
         this.auction = auction;
     }
-
     public Auction getAuction() {
         return auction;
     }

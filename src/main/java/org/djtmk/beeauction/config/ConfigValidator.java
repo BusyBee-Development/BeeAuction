@@ -18,7 +18,6 @@ public class ConfigValidator {
     public boolean validate() {
         FileConfiguration config = plugin.getConfig();
 
-        // Validate auction settings
         if (config.getDouble("auction.min-bid-amount") <= 0) {
             log.severe("[BeeAuction] Invalid config: 'auction.min-bid-amount' must be a positive number.");
             isValid = false;
@@ -32,7 +31,6 @@ public class ConfigValidator {
             isValid = false;
         }
 
-        // Validate database settings
         String dbType = config.getString("database.type", "sqlite");
         if (!dbType.equalsIgnoreCase("sqlite") && !dbType.equalsIgnoreCase("mysql")) {
             log.severe("[BeeAuction] Invalid config: 'database.type' must be either 'sqlite' or 'mysql'.");

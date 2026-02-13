@@ -17,7 +17,7 @@ public class GUIListener implements Listener {
         event.setCancelled(true);
 
         Player player = (Player) event.getWhoClicked();
-        AuctionGUI gui = new AuctionGUI(player); // This is a simplified example
+        AuctionGUI gui = new AuctionGUI(player);
 
         if (event.getSlot() == 45) {
             gui.prevPage();

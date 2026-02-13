@@ -5,11 +5,9 @@ import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
-import org.djtmk.beeauction.BeeAuction;
 
 import java.util.UUID;
 
-// UPDATED: This class now supports depositing money to offline players.
 public class EconomyHandler {
     private final Economy economy;
 
@@ -40,7 +38,6 @@ public class EconomyHandler {
         return response.transactionSuccess();
     }
 
-    // NEW: Deposit money to a player who may be offline, using their UUID.
     public boolean deposit(UUID playerUuid, double amount) {
         if (economy == null || playerUuid == null || amount <= 0) {
             return false;

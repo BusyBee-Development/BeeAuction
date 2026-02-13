@@ -10,7 +10,6 @@ import org.bukkit.inventory.ItemStack;
 import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -93,17 +92,32 @@ public class MySQLManager implements AsyncDatabaseManager {
     }
 
     @Override
-    public CompletableFuture<ResultSet> getAuctionHistory() {
+    public CompletableFuture<List<org.djtmk.beeauction.data.AuctionHistoryEntry>> getAuctionHistory() {
         return CompletableFuture.supplyAsync(() -> {
+            // FIXED: Process ResultSet inside try-with-resources to prevent resource leak
             String sql = "SELECT * FROM auction_history ORDER BY timestamp DESC LIMIT 10";
-            try {
-                Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(sql);
-                return stmt.executeQuery();
+            List<org.djtmk.beeauction.data.AuctionHistoryEntry> entries = new ArrayList<>();
+
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql);
+                 ResultSet rs = stmt.executeQuery()) {
+
+                while (rs.next()) {
+                    org.djtmk.beeauction.data.AuctionHistoryEntry entry = new org.djtmk.beeauction.data.AuctionHistoryEntry(
+                            rs.getInt("id"),
+                            rs.getString("player_name"),
+                            UUID.fromString(rs.getString("player_uuid")),
+                            rs.getDouble("amount"),
+                            rs.getString("auction_type"),
+                            rs.getString("reward"),
+                            rs.getTimestamp("timestamp")
+                    );
+                    entries.add(entry);
+                }
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to get auction history", e);
-                return null;
             }
+            return entries;
         });
     }
 
@@ -125,34 +139,57 @@ public class MySQLManager implements AsyncDatabaseManager {
     @Override
     public CompletableFuture<List<ItemStack>> getAndRemovePendingRewards(UUID playerUuid) {
         return CompletableFuture.supplyAsync(() -> {
-            String selectSql = "SELECT id, item_data FROM pending_rewards WHERE player_uuid = ?";
+            String selectSql = "SELECT id, item_data FROM pending_rewards WHERE player_uuid = ? FOR UPDATE";
             String deleteSql = "DELETE FROM pending_rewards WHERE id = ?";
             List<ItemStack> items = new ArrayList<>();
             List<Integer> idsToRemove = new ArrayList<>();
 
-            try (Connection conn = getConnection(); PreparedStatement selectStmt = conn.prepareStatement(selectSql)) {
-                selectStmt.setString(1, playerUuid.toString());
-                ResultSet rs = selectStmt.executeQuery();
-                while (rs.next()) {
-                    idsToRemove.add(rs.getInt("id"));
-                    try {
-                        ItemStack item = ItemUtils.deserializeItemFromBase64(rs.getString("item_data"));
-                        items.add(item);
-                    } catch (IOException e) {
-                        plugin.getLogger().log(Level.WARNING, "Could not deserialize a pending item reward.", e);
-                    }
-                }
-                if (!idsToRemove.isEmpty()) {
-                    try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
-                        for (Integer id : idsToRemove) {
-                            deleteStmt.setInt(1, id);
-                            deleteStmt.addBatch();
+            Connection conn = null;
+            try {
+                conn = getConnection();
+                conn.setAutoCommit(false);
+
+                try (PreparedStatement selectStmt = conn.prepareStatement(selectSql)) {
+                    selectStmt.setString(1, playerUuid.toString());
+                    ResultSet rs = selectStmt.executeQuery();
+                    while (rs.next()) {
+                        idsToRemove.add(rs.getInt("id"));
+                        try {
+                            ItemStack item = ItemUtils.deserializeItemFromBase64(rs.getString("item_data"));
+                            items.add(item);
+                        } catch (IOException e) {
+                            plugin.getLogger().log(Level.WARNING, "Could not deserialize a pending item reward.", e);
                         }
-                        deleteStmt.executeBatch();
                     }
+
+                    if (!idsToRemove.isEmpty()) {
+                        try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
+                            for (Integer id : idsToRemove) {
+                                deleteStmt.setInt(1, id);
+                                deleteStmt.addBatch();
+                            }
+                            deleteStmt.executeBatch();
+                        }
+                    }
+
+                    conn.commit();
+                } catch (SQLException e) {
+                    if (conn != null) {
+                        conn.rollback();
+                    }
+                    throw e;
                 }
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to get and remove pending rewards", e);
+            } finally {
+                if (conn != null) {
+                    try {
+                        conn.setAutoCommit(true);
+                        conn.close();
+                    } catch (SQLException e) {
+                        plugin.getLogger().log(Level.WARNING, "Failed to restore connection state", e);
+                    }
+                }
             }
             return items;
         });

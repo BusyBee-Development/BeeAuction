@@ -7,13 +7,11 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.djtmk.beeauction.economy.EconomyProvider;
 
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class VaultProvider implements EconomyProvider {
 
     private final Economy economy;
-
     public VaultProvider(Economy economy) {
         this.economy = economy;
     }
@@ -33,7 +31,6 @@ public class VaultProvider implements EconomyProvider {
         return CompletableFuture.supplyAsync(() -> {
             EconomyResponse response = economy.withdrawPlayer(player, amount);
             if (!response.transactionSuccess()) {
-                // Simple rollback: deposit the amount back if withdrawal failed
                 economy.depositPlayer(player, amount);
                 return false;
             }

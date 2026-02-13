@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 
 public class ItemUtils {
 
@@ -37,11 +36,9 @@ public class ItemUtils {
             try {
                 return deserializeItemFromBase64(section.getString("item_data"));
             } catch (IOException e) {
-                // Fallback to legacy deserialization
             }
         }
 
-        // Legacy deserialization
         String materialName = section.getString("material");
         if (materialName == null) return null;
 

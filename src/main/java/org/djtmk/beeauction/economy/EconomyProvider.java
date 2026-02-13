@@ -2,7 +2,6 @@ package org.djtmk.beeauction.economy;
 
 import org.bukkit.entity.Player;
 
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public interface EconomyProvider {

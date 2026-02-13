@@ -8,7 +8,6 @@ import org.bukkit.inventory.ItemStack;
 import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.config.MessageEnum;
 
-import java.util.List;
 import java.util.Map;
 
 public class ClaimCommand implements CommandExecutor {

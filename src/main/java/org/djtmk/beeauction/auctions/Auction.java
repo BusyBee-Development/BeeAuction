@@ -25,10 +25,12 @@ public class Auction {
     private final String ownerName;
     private final UUID ownerUuid;
 
-    private double currentBid;
-    private Player highestBidder;
-    private boolean active;
-    private long endTime;
+    // FIXED: Use volatile for fields accessed from multiple threads
+    // Ensures visibility of changes across threads (main thread + AuctionTask async thread)
+    private volatile double currentBid;
+    private volatile Player highestBidder;
+    private volatile boolean active;
+    private volatile long endTime;
 
     public Auction(BeeAuction plugin, ItemStack item, double startPrice, int duration, String customName, Player owner) {
         this.plugin = plugin;
@@ -69,39 +71,59 @@ public class Auction {
         Bukkit.broadcastMessage(MessageEnum.AUCTION_STARTED.get("item", rewardName, "price", plugin.getEconomyManager().getProviderName()));
     }
 
-    public void end() {
-        active = false;
-
-        if (highestBidder == null) {
-            Bukkit.broadcastMessage(MessageEnum.CANCELLED.get("reason", "No bids were placed."));
-            if (type == AuctionType.ITEM && item != null && ownerUuid != null) {
-                returnItemToOwner("Your auctioned item was returned (no bids).");
-            }
+    // FIXED: Synchronized to prevent multiple concurrent end() calls
+    public synchronized void end() {
+        // Check if already ended
+        if (!active) {
             return;
         }
-
-        handleWinner();
-        handlePayment();
-        broadcastEndMessage();
-    }
-
-    public void cancel() {
         active = false;
-        Bukkit.broadcastMessage(MessageEnum.CANCELLED.get("reason", "The auction was cancelled by an admin."));
 
-        if (highestBidder != null) {
-            plugin.getEconomyManager().deposit(highestBidder, currentBid);
-            if (highestBidder.isOnline()) {
-                MessageUtil.sendMessage(highestBidder, "§aYour bid of " + plugin.getEconomyManager().getProviderName() + " was refunded.");
+        // FIXED: Ensure all Bukkit API calls run on main thread
+        // This method is called from AuctionTask (async), so schedule to main thread
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (highestBidder == null) {
+                Bukkit.broadcastMessage(MessageEnum.CANCELLED.get("reason", "No bids were placed."));
+                if (type == AuctionType.ITEM && item != null && ownerUuid != null) {
+                    returnItemToOwner("Your auctioned item was returned (no bids).");
+                }
+                return;
             }
-        }
 
-        if (type == AuctionType.ITEM && item != null && ownerUuid != null) {
-            returnItemToOwner("Your auctioned item was returned because the auction was cancelled.");
-        }
+            handleWinner();
+            handlePayment();
+            broadcastEndMessage();
+        });
     }
 
-    public boolean placeBid(Player player, double amount) {
+    // FIXED: Synchronized to prevent race conditions with end()
+    public synchronized void cancel() {
+        // Check if already ended
+        if (!active) {
+            return;
+        }
+        active = false;
+
+        // FIXED: Ensure all Bukkit API calls run on main thread
+        // May be called from async contexts, so schedule to main thread
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Bukkit.broadcastMessage(MessageEnum.CANCELLED.get("reason", "The auction was cancelled by an admin."));
+
+            if (highestBidder != null) {
+                plugin.getEconomyManager().deposit(highestBidder, currentBid);
+                if (highestBidder.isOnline()) {
+                    MessageUtil.sendMessage(highestBidder, "§aYour bid of " + plugin.getEconomyManager().getProviderName() + " was refunded.");
+                }
+            }
+
+            if (type == AuctionType.ITEM && item != null && ownerUuid != null) {
+                returnItemToOwner("Your auctioned item was returned because the auction was cancelled.");
+            }
+        });
+    }
+
+    // FIXED: Synchronized to prevent race conditions when multiple players bid simultaneously
+    public synchronized boolean placeBid(Player player, double amount) {
         AuctionBidEvent bidEvent = new AuctionBidEvent(this, player, amount);
         Bukkit.getPluginManager().callEvent(bidEvent);
         if (bidEvent.isCancelled()) {
@@ -143,7 +165,13 @@ public class Auction {
             if (type == AuctionType.ITEM && item != null) {
                 Map<Integer, ItemStack> couldNotFit = highestBidder.getInventory().addItem(item.clone());
                 if (!couldNotFit.isEmpty()) {
-                    plugin.getDatabaseManager().addPendingReward(highestBidder.getUniqueId(), couldNotFit.get(0), "Auction win (inventory full)");
+                    // FIXED: Add error handling for database futures
+                    plugin.getDatabaseManager().addPendingReward(highestBidder.getUniqueId(), couldNotFit.get(0), "Auction win (inventory full)")
+                            .whenComplete((result, error) -> {
+                                if (error != null) {
+                                    plugin.getLogger().severe("Failed to save pending reward for " + highestBidder.getName() + ": " + error.getMessage());
+                                }
+                            });
                     MessageUtil.sendMessage(highestBidder, "§eYour inventory was full! The won item has been sent to your /claim queue.");
                 }
                 MessageUtil.sendMessage(highestBidder, MessageEnum.WIN.get("item", getRewardName()));
@@ -154,7 +182,13 @@ public class Auction {
             }
         } else {
             if (type == AuctionType.ITEM && item != null) {
-                plugin.getDatabaseManager().addPendingReward(highestBidder.getUniqueId(), item, "Auction win");
+                // FIXED: Add error handling for database futures
+                plugin.getDatabaseManager().addPendingReward(highestBidder.getUniqueId(), item, "Auction win")
+                        .whenComplete((result, error) -> {
+                            if (error != null) {
+                                plugin.getLogger().severe("Failed to save pending reward for " + highestBidder.getName() + ": " + error.getMessage());
+                            }
+                        });
             }
         }
     }
@@ -180,10 +214,22 @@ public class Auction {
         if (owner != null && owner.isOnline()) {
             Map<Integer, ItemStack> couldNotFit = owner.getInventory().addItem(item.clone());
             if (!couldNotFit.isEmpty()) {
-                plugin.getDatabaseManager().addPendingReward(ownerUuid, couldNotFit.get(0), "Auction item returned (inventory full)");
+                // FIXED: Add error handling for database futures
+                plugin.getDatabaseManager().addPendingReward(ownerUuid, couldNotFit.get(0), "Auction item returned (inventory full)")
+                        .whenComplete((result, error) -> {
+                            if (error != null) {
+                                plugin.getLogger().severe("Failed to return item to owner " + ownerUuid + ": " + error.getMessage());
+                            }
+                        });
             }
         } else {
-            plugin.getDatabaseManager().addPendingReward(ownerUuid, item.clone(), "Auction item returned");
+            // FIXED: Add error handling for database futures
+            plugin.getDatabaseManager().addPendingReward(ownerUuid, item.clone(), "Auction item returned")
+                    .whenComplete((result, error) -> {
+                        if (error != null) {
+                            plugin.getLogger().severe("Failed to return item to owner " + ownerUuid + ": " + error.getMessage());
+                        }
+                    });
         }
         if (owner != null && owner.isOnline()) {
             MessageUtil.sendMessage(owner, "§a" + reason);
@@ -197,13 +243,18 @@ public class Auction {
                 "amount", plugin.getEconomyManager().getProviderName(),
                 "item", finalRewardName
         ));
+        // FIXED: Add error handling for database futures
         plugin.getDatabaseManager().saveAuctionResult(
                 highestBidder.getName(),
                 highestBidder.getUniqueId(),
                 currentBid,
                 type.name(),
                 finalRewardName
-        );
+        ).whenComplete((result, error) -> {
+            if (error != null) {
+                plugin.getLogger().severe("Failed to save auction result: " + error.getMessage());
+            }
+        });
     }
 
     public String getRewardName() {

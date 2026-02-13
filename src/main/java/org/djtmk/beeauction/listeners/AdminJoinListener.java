@@ -17,9 +17,7 @@ public class AdminJoinListener implements Listener {
     @EventHandler
     public void onAdminJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        // The permission should be specific to the plugin
         if (player.hasPermission("beeauction.admin")) {
-            // Delay notification slightly to avoid chat spam on join
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 plugin.getUpdateChecker().notifyPlayer(player);
             }, 40L); // 2-second delay

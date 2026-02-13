@@ -21,7 +21,6 @@ public class GlobalAuctionTabCompleter implements TabCompleter {
         updateCommandLists();
     }
 
-    // NEW: Method to allow reloading tab-complete lists if config changes
     public void updateCommandLists() {
         String startCmd = plugin.getConfigManager().getAdminSubcommandStart();
         String cancelCmd = plugin.getConfigManager().getAdminSubcommandCancel();

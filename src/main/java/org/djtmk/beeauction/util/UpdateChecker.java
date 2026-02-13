@@ -16,9 +16,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-/**
- * A reusable class to check for new plugin updates from Modrinth.
- */
 public class UpdateChecker {
 
     private final JavaPlugin plugin;
@@ -26,20 +23,11 @@ public class UpdateChecker {
     private String latestVersion;
     private String downloadUrl;
 
-    /**
-     * Initializes the update checker.
-     *
-     * @param plugin The instance of your plugin.
-     * @param modrinthProjectId The Modrinth project ID or slug (e.g., "beeauction" or "AABBCCDD").
-     */
     public UpdateChecker(JavaPlugin plugin, String modrinthProjectId) {
         this.plugin = plugin;
         this.modrinthProjectId = modrinthProjectId;
     }
 
-    /**
-     * Asynchronously checks for a new version and stores the result.
-     */
     public void check() {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -55,7 +43,7 @@ public class UpdateChecker {
 
                 JsonArray versions = JsonParser.parseReader(new InputStreamReader(connection.getInputStream())).getAsJsonArray();
                 if (versions.size() > 0) {
-                    JsonObject latest = versions.get(0).getAsJsonObject(); // The first result is the latest
+                    JsonObject latest = versions.get(0).getAsJsonObject();
                     String newVersion = latest.get("version_number").getAsString();
 
                     if (isNewer(plugin.getDescription().getVersion(), newVersion)) {
@@ -72,12 +60,6 @@ public class UpdateChecker {
         });
     }
 
-    /**
-     * Notifies a player if a new update is available.
-     * This should be called for admins on join.
-     *
-     * @param player The player to notify.
-     */
     public void notifyPlayer(Player player) {
         if (latestVersion != null && downloadUrl != null) {
             Component message = Component.text()

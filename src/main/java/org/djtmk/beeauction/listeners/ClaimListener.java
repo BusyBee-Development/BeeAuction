@@ -19,7 +19,6 @@ public class ClaimListener implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        // Check for pending rewards asynchronously to avoid login lag
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             plugin.getDatabaseManager().hasPendingRewards(player.getUniqueId()).thenAccept(hasRewards -> {
                 if (hasRewards) {
