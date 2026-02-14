@@ -5,6 +5,7 @@ import org.bukkit.entity.Player;
 import org.djtmk.beeauction.BeeAuction;
 import org.djtmk.beeauction.api.BeeAuctionAPI;
 import org.djtmk.beeauction.auctions.Auction;
+import org.djtmk.beeauction.config.ConfigManager;
 
 public class PlaceholderHook extends PlaceholderExpansion {
 
@@ -36,14 +37,46 @@ public class PlaceholderHook extends PlaceholderExpansion {
 
     @Override
     public String onPlaceholderRequest(Player player, String identifier) {
+        // Get configurable placeholder messages
+        String activeTrue = ConfigManager.getMessage("placeholders.active-true");
+        String activeFalse = ConfigManager.getMessage("placeholders.active-false");
+        String noAuctionItem = ConfigManager.getMessage("placeholders.no-auction-item");
+        String noAuctionBid = ConfigManager.getMessage("placeholders.no-auction-bid");
+        String noAuctionBidder = ConfigManager.getMessage("placeholders.no-auction-bidder");
+        String noAuctionTime = ConfigManager.getMessage("placeholders.no-auction-time");
+
         // Support both old and new placeholder names for backward compatibility
         if (identifier.equals("active_listings") || identifier.equals("active")) {
-            return BeeAuctionAPI.hasActiveAuction() ? "true" : "false";
+            return BeeAuctionAPI.hasActiveAuction() ? activeTrue : activeFalse;
+        }
+
+        // Player-specific placeholder: auctions won count
+        if (identifier.equals("auctions_won")) {
+            if (player == null) {
+                return "0";
+            }
+            return String.valueOf(plugin.getDatabaseManager().getAuctionsWonCount(player.getUniqueId()));
         }
 
         Auction auction = BeeAuctionAPI.getActiveAuction();
         if (auction == null) {
-            return "";
+            // Return configurable fallback messages when no auction is active
+            switch (identifier) {
+                case "highest_bid":
+                case "current_bid":
+                    return noAuctionBid;
+                case "highest_bidder":
+                case "bidder":
+                    return noAuctionBidder;
+                case "item_name":
+                case "item":
+                    return noAuctionItem;
+                case "time_remaining":
+                case "time_left":
+                    return noAuctionTime;
+                default:
+                    return null;
+            }
         }
 
         switch (identifier) {

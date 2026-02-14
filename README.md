@@ -200,11 +200,41 @@ If PlaceholderAPI is installed, the following placeholders are available:
 
 | Placeholder | Description |
 |-------------|-------------|
-| `%beeauction_active%` | true/false if auction is active |
+| `%beeauction_active%` | true/false if auction is active (configurable) |
 | `%beeauction_item%` | Current auction item name |
 | `%beeauction_current_bid%` | Current highest bid |
 | `%beeauction_bidder%` | Current highest bidder |
 | `%beeauction_time_left%` | Time remaining (formatted) |
+| `%beeauction_auctions_won%` | Number of auctions won by the player |
+
+### Customizing Placeholder Messages
+
+You can customize how placeholders display in `messages.yml` under the `placeholders` section. This is especially useful for holograms to prevent empty placeholders when no auction is active:
+
+```yaml
+placeholders:
+  # Display text for %beeauction_active% placeholder
+  active-true: "true"
+  active-false: "false"
+  # Fallback messages when no auction is active (prevents empty placeholders in holograms)
+  no-auction-item: "No auction"
+  no-auction-bid: "N/A"
+  no-auction-bidder: "None"
+  no-auction-time: "N/A"
+```
+
+**Example Hologram Setup:**
+```
+&e&lAuction Status
+&7Active: &f%beeauction_active%
+&7Item: &f%beeauction_item%
+&7Current Bid: &a$%beeauction_current_bid%
+&7Bidder: &f%beeauction_bidder%
+&7Time Left: &c%beeauction_time_left%s
+```
+
+**Leaderboard Example (using auctions_won):**
+Use plugins like DecentHolograms or HolographicDisplays to create leaderboards based on `%beeauction_auctions_won%`.
 
 ## Security Features
 

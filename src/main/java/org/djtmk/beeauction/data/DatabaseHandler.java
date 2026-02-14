@@ -22,4 +22,6 @@ public interface DatabaseHandler {
     List<ItemStack> getAndRemovePendingRewards(UUID playerUuid) throws SQLException;
 
     boolean hasPendingRewards(UUID playerUuid) throws SQLException;
+
+    int getAuctionsWonCount(UUID playerUuid) throws SQLException;
 }

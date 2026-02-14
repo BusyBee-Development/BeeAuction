@@ -46,3 +46,15 @@ history-button: "&aAuction History"
 bid-button: "&aClick to bid!"
 win-message: "&aCongratulations! You won the auction for &e{item}&a for &e{amount}&a."
 lose-message: "&cYou lost the auction for &e{item}&c. The winning bid was &e{amount}&c."
+
+# PlaceholderAPI Configuration
+# Customize how placeholders display in holograms and other plugins
+placeholders:
+  # Display text for %beeauction_active% placeholder
+  active-true: "true"
+  active-false: "false"
+  # Fallback messages when no auction is active (prevents empty placeholders in holograms)
+  no-auction-item: "No auction"
+  no-auction-bid: "N/A"
+  no-auction-bidder: "None"
+  no-auction-time: "N/A"

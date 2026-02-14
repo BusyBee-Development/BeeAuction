@@ -203,4 +203,18 @@ public class SQLiteHandler implements DatabaseHandler {
             }
         }
     }
+
+    @Override
+    public int getAuctionsWonCount(UUID playerUuid) throws SQLException {
+        String sql = "SELECT COUNT(*) as count FROM auction_history WHERE player_uuid = ?";
+        try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, playerUuid.toString());
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("count");
+                }
+            }
+        }
+        return 0;
+    }
 }

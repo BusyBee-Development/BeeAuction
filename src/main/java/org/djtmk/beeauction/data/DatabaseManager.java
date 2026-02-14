@@ -74,6 +74,17 @@ public class DatabaseManager {
         return false;
     }
 
+    public int getAuctionsWonCount(UUID playerUuid) {
+        if (databaseHandler != null) {
+            try {
+                return databaseHandler.getAuctionsWonCount(playerUuid);
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to get auctions won count", e);
+            }
+        }
+        return 0;
+    }
+
     public DatabaseHandler getDatabaseHandler() {
         return databaseHandler;
     }
