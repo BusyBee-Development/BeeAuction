@@ -6,6 +6,8 @@ public enum MessageEnum {
     NEW_BID,
     OUTBID,
     WIN,
+    WIN_MESSAGE,
+    LOSE_MESSAGE,
     AUCTION_CANCELLED,
     NO_AUCTION,
     AUCTION_ENDED,

@@ -191,7 +191,7 @@ public class Auction {
                             });
                     MessageUtil.sendMessage(highestBidder, "§eYour inventory was full! The won item has been sent to your /claim queue.");
                 }
-                MessageUtil.sendMessage(highestBidder, MessageEnum.WIN.get("item", getRewardName()));
+                MessageUtil.sendMessage(highestBidder, MessageEnum.WIN_MESSAGE.get("item", getRewardName(), "amount", MessageUtil.formatPrice(currentBid)));
             } else if (type == AuctionType.COMMAND && command != null) {
                 // SECURITY FIX: Sanitize player name to prevent command injection
                 String sanitizedPlayerName = InputSanitizer.sanitizePlayerName(highestBidder.getName());
@@ -199,7 +199,7 @@ public class Auction {
 
                 plugin.getLogger().info("Executing auction command: " + InputSanitizer.sanitizeForLogging(formattedCommand) + " for player: " + highestBidder.getName());
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formattedCommand);
-                MessageUtil.sendMessage(highestBidder, MessageEnum.WIN.get("item", getRewardName()));
+                MessageUtil.sendMessage(highestBidder, MessageEnum.WIN_MESSAGE.get("item", getRewardName(), "amount", MessageUtil.formatPrice(currentBid)));
             }
         } else {
             if (type == AuctionType.ITEM && item != null) {

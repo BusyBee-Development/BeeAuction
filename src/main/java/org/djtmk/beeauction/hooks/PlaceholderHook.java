@@ -36,8 +36,9 @@ public class PlaceholderHook extends PlaceholderExpansion {
 
     @Override
     public String onPlaceholderRequest(Player player, String identifier) {
-        if (identifier.equals("active_listings")) {
-            return BeeAuctionAPI.hasActiveAuction() ? "1" : "0";
+        // Support both old and new placeholder names for backward compatibility
+        if (identifier.equals("active_listings") || identifier.equals("active")) {
+            return BeeAuctionAPI.hasActiveAuction() ? "true" : "false";
         }
 
         Auction auction = BeeAuctionAPI.getActiveAuction();
@@ -47,12 +48,16 @@ public class PlaceholderHook extends PlaceholderExpansion {
 
         switch (identifier) {
             case "highest_bid":
+            case "current_bid":
                 return String.valueOf(auction.getCurrentBid());
             case "highest_bidder":
+            case "bidder":
                 return auction.getHighestBidder() != null ? auction.getHighestBidder().getName() : "None";
             case "item_name":
+            case "item":
                 return auction.getRewardName();
             case "time_remaining":
+            case "time_left":
                 return String.valueOf(auction.getTimeRemaining());
             default:
                 return null;
