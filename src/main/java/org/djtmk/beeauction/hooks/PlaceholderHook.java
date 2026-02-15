@@ -37,7 +37,6 @@ public class PlaceholderHook extends PlaceholderExpansion {
 
     @Override
     public String onPlaceholderRequest(Player player, String identifier) {
-        // Get configurable placeholder messages
         String activeTrue = ConfigManager.getMessage("placeholders.active-true");
         String activeFalse = ConfigManager.getMessage("placeholders.active-false");
         String noAuctionItem = ConfigManager.getMessage("placeholders.no-auction-item");
@@ -45,22 +44,25 @@ public class PlaceholderHook extends PlaceholderExpansion {
         String noAuctionBidder = ConfigManager.getMessage("placeholders.no-auction-bidder");
         String noAuctionTime = ConfigManager.getMessage("placeholders.no-auction-time");
 
-        // Support both old and new placeholder names for backward compatibility
         if (identifier.equals("active_listings") || identifier.equals("active")) {
             return BeeAuctionAPI.hasActiveAuction() ? activeTrue : activeFalse;
         }
 
-        // Player-specific placeholder: auctions won count
         if (identifier.equals("auctions_won")) {
             if (player == null) {
                 return "0";
             }
-            return String.valueOf(plugin.getDatabaseManager().getAuctionsWonCount(player.getUniqueId()));
+
+            try {
+                return String.valueOf(plugin.getDatabaseManager().getAuctionsWonCount(player.getUniqueId()).join());
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to get auctions won count for " + player.getName());
+                return "0";
+            }
         }
 
         Auction auction = BeeAuctionAPI.getActiveAuction();
         if (auction == null) {
-            // Return configurable fallback messages when no auction is active
             switch (identifier) {
                 case "highest_bid":
                 case "current_bid":

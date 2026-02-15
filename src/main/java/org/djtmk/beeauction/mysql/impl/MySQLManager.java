@@ -210,4 +210,22 @@ public class MySQLManager implements AsyncDatabaseManager {
             return false;
         });
     }
+
+    @Override
+    public CompletableFuture<Integer> getAuctionsWonCount(UUID playerUuid) {
+        return CompletableFuture.supplyAsync(() -> {
+            String sql = "SELECT COUNT(*) as count FROM auction_history WHERE player_uuid = ?";
+            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, playerUuid.toString());
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt("count");
+                    }
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to get auctions won count", e);
+            }
+            return 0;
+        });
+    }
 }

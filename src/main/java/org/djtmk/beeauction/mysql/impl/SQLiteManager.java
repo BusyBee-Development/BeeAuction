@@ -97,4 +97,16 @@ public class SQLiteManager implements AsyncDatabaseManager {
             }
         }, sqliteExecutor);
     }
+
+    @Override
+    public CompletableFuture<Integer> getAuctionsWonCount(UUID playerUuid) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return sqLiteHandler.getAuctionsWonCount(playerUuid);
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to get auctions won count", e);
+                return 0;
+            }
+        }, sqliteExecutor);
+    }
 }

@@ -22,4 +22,6 @@ public interface AsyncDatabaseManager {
     CompletableFuture<List<ItemStack>> getAndRemovePendingRewards(UUID playerUuid);
 
     CompletableFuture<Boolean> hasPendingRewards(UUID playerUuid);
+
+    CompletableFuture<Integer> getAuctionsWonCount(UUID playerUuid);
 }
